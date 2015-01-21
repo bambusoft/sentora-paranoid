@@ -911,7 +911,7 @@ if [[ "$REVERT" = "false" ]] ; then
 		fi
 		
 		# Now adjust php configurations in both apache2/php.ini and cli/php.ini
-		# (must of them has correct values by default, but we aro not going to make any assumptions)
+		# (many of them has correct values by default, but we aro not going to make any assumptions)
 
 		# Disable insecure functions 
 		sed -i "s@disable_functions =.*@disable_functions = system,exec,eval,pcntl_alarm,pcntl_fork,pcntl_waitpid,pcntl_wait,pcntl_wifexited,pcntl_wifstopped,pcntl_wifsignaled,pcntl_wexitstatus,pcntl_wtermsig,pcntl_wstopsig,pcntl_signal,pcntl_signal_dispatch,pcntl_get_last_error,pcntl_strerror,pcntl_sigprocmask,pcntl_sigwaitinfo,pcntl_sigtimedwait,pcntl_exec,pcntl_getpriority,pcntl_setpriority@" /etc/php5/apache2/php.ini

@@ -1,0 +1,189 @@
+# Fail2Ban configuration file.
+
+[DEFAULT]
+ignoreip = 127.0.0.1/8 %%LOCAL_IP%%
+bantime  = 600
+findtime = 10800
+maxretry = 3
+
+backend = auto
+usedns = warn
+destemail = root@localhost
+sendername = sentora-paranoid
+banaction = iptables-multiport
+mta = sendmail
+protocol = tcp
+chain = INPUT
+
+action_ = %(banaction)s[name=%(__name__)s, port="%(port)s", protocol="%(protocol)s", chain="%(chain)s"]
+action = %(action_)s
+
+[ssh]
+enabled  = true
+port     = %%SSHDPORT%%
+filter   = sshd
+logpath  = /var/log/auth.log
+maxretry = 5
+
+[ssh-ddos]
+enabled  = true
+port     = %%SSHDPORT%%
+filter   = sshd-ddos
+logpath  = /var/log/auth.log
+maxretry = 5
+
+[ssh-route]
+enabled = false
+filter = sshd
+action = route
+logpath = /var/log/sshd.log
+maxretry = 6
+
+[ssh-iptables-ipset4]
+enabled  = false
+port     = ssh
+filter   = sshd
+banaction = iptables-ipset-proto4
+logpath  = /var/log/sshd.log
+maxretry = 6
+
+[ssh-iptables-ipset6]
+enabled  = false
+port     = ssh
+filter   = sshd
+banaction = iptables-ipset-proto6
+logpath  = /var/log/sshd.log
+maxretry = 6
+
+[pam-generic]
+enabled  = true
+filter   = pam-generic
+port     = all
+banaction = iptables-allports
+port     = anyport
+logpath  = /var/log/auth.log
+maxretry = 6
+
+[xinetd-fail]
+enabled   = false
+filter    = xinetd-fail
+port      = all
+banaction = iptables-multiport-log
+logpath   = /var/log/daemon.log
+maxretry  = 2
+
+#
+# HTTP servers
+#
+[apache]
+enabled  = true
+port     = http,https
+filter   = apache-auth
+logpath  = /var/sentora/logs/domains/*/*error.log
+maxretry = 5
+
+[apache-multiport]
+enabled   = true
+port      = http,https
+filter    = apache-auth
+logpath   = /var/sentora/logs/domains/*/*error.log
+maxretry  = 5
+
+[apache-noscript]
+enabled  = false
+port     = http,https
+filter   = apache-noscript
+logpath  = /var/sentora/logs/domains/*/*error.log
+maxretry = 5
+
+[apache-overflows]
+enabled  = true
+port     = http,https
+filter   = apache-overflows
+logpath  = /var/sentora/logs/domains/*/*error.log
+maxretry = 2
+
+[php-url-fopen]
+enabled = true
+port    = http,https
+filter  = php-url-fopen
+logpath = /var/sentora/logs/domains/*/*error.log
+
+[roundcube-auth]
+enabled  = true
+filter   = roundcube-auth
+port     = http,https
+logpath  = /var/sentora/logs/roundcube/sessions
+
+#
+# FTP server
+#
+[proftpd]
+enabled  = true
+port     = ftp,ftp-data,ftps,ftps-data
+filter   = proftpd
+logpath  = /var/sentora/logs/proftpd/auth.log
+maxretry = 5
+
+
+#
+# Mail server
+#
+[postfix]
+enabled  = true
+port     = smtp,ssmtp,imap2,imap3,imaps,pop3,pop3s
+filter   = postfix
+logpath  = /var/log/mail.log
+
+[sasl]
+enabled  = true
+port     = smtp,ssmtp,imap2,imap3,imaps,pop3,pop3s
+filter   = sasl
+bantime  = 10800
+logpath  = /var/log/mail.log
+
+[dovecot]
+enabled = true
+ignoreip=127.0.0.1
+port    = smtp,ssmtp,submission,imap2,imap3,imaps,pop3,pop3s
+filter  = dovecot
+logpath = /var/log/dovecot-info.log
+
+
+[mysqld-auth]
+enabled  = true
+filter   = mysqld-auth
+port     = 3306
+logpath  = /var/log/mysql/error.log
+
+# DNS Servers
+# !!! WARNING !!!
+#   Since UDP is connection-less protocol, spoofing of IP and imitation
+#   of illegal actions is way too simple.  Thus enabling of this filter
+#   might provide an easy way for implementing a DoS against a chosen
+#   victim. See
+#    http://nion.modprobe.de/blog/archives/690-fail2ban-+-dns-fail.html
+#   Please DO NOT USE this jail unless you know what you are doing.
+#[named-refused-udp]
+#enabled  = false
+#port     = domain,953
+#protocol = udp
+#filter   = named-refused
+#logpath  = /var/sentora/logs/bind/bind.log
+
+[named-refused-tcp]
+enabled  = true
+port     = domain,953
+protocol = tcp
+filter   = named-refused
+logpath  = /var/sentora/logs/bind/bind.log
+
+[recidive]
+enabled  = false
+filter   = recidive
+logpath  = /var/log/fail2ban.log
+action   = iptables-allports[name=recidive]
+           sendmail-whois-lines[name=recidive, logpath=/var/log/fail2ban.log]
+bantime  = 604800  ; 1 week
+findtime = 86400   ; 1 day
+maxretry = 5

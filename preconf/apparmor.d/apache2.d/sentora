@@ -1,0 +1,25 @@
+^sentora {
+	#include <abstractions/apache2-common>
+
+	/proc/ r,
+	/proc/** r,
+	/tmp/** wk,
+
+	# for log writing (could be abstracted)
+	/var/sentora/logs/domains/** w,
+	/var/sentora/logs/domains/** w,
+
+	# Access to standard sentora system files
+	/etc/sentora/** rkw,
+	/var/sentora/** rkw,
+
+	/bin/dash Ux,						# phpsysinfo via sentora
+	/etc/** r,
+	/run/mysqld/mysqld.sock rw,
+	/usr/lib/locale/locale-archive r,
+	/usr/share/locale-langpack/** r,
+	/usr/share/mysql/** r,
+	/usr/share/zoneinfo/ r,
+	/usr/share/zoneinfo/** r,
+	/sys/devices/virtual/dmi/id/** r,	# phpsysinfo via sentora
+}

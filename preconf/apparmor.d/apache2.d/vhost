@@ -1,0 +1,14 @@
+^vhost {
+  #include <abstractions/apache2-common>
+
+  /proc/ r,
+  /proc/** r,
+  /tmp/ w,
+  /tmp/** wk,
+  
+  /var/sentora/hostdata/*/public_html/ rw,
+  /var/sentora/hostdata/*/public_html/** rw,
+  /var/sentora/logs/domains/*/*.log     w,
+  /run/mysqld/mysqld.sock rw,
+  /usr/share/mysql/** r,
+}

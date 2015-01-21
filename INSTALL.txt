@@ -1,0 +1,41 @@
+sentora-paranoid installation v1.0.0
+====================================
+
+IMPORTANT: 
+DO NOT USE THIS SCRIPT IN A PRODUCTION SERVER UNLESS YOU ARE VERY SURE THAT YOU
+HAVE YOUR EXPECTED RESULTS IN A TESTED ENVIRONMENT
+
+
+1) Start with a new fresh installation of Ubuntu 14.04 minimal server
+(Ubuntu 12.04 and CentOs 6+ are not being tested yet in sentora-paranoid project)
+
+2) Follow the sentora project installation instructions decribed at sentora.org
+
+3) Once you have finished, run sentora-paranoid installer script with root privileges just after sentora installer:
+(where yymmdd must be replaced for release number)
+
+> bash <(curl -L -Ss http://sentora-paranoid.open-source.tk/installers/1.0.0-yymmdd/sentora-paranoid.sh)
+
+4) The original sentora project execution environment will be changed
+please take a look to the log file created and check for any undesirable results
+
+5) If you found any inconsistency between actual results and those you expected
+or you want to return sentora to its original state, you can execute the script
+with the - revert - option (This can be done only inmediatly after sentora-paranoid
+installation because all configurations will be restored loosing any possible
+changes)
+
+6) To review server daemons status use: > sentora-paranoid.sh status
+
+7) Please report any bug or suggestion in the sentora-paranoid project forums.
+
+------
+
+Optional installation method: Downloading and executing the script
+(where yymmdd must be replaced for release number)
+
+> wget http://sentora-paranoid.open-source.tk/installers/1.0.0-yymmdd/sentora-paranoid.sh
+> chmod u+x sentora-paranoid.sh
+> ./sentora-paranoid.sh
+
+For more detailed information you can review official sentora-paranoid documentation

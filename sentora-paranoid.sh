@@ -18,6 +18,8 @@
 #
 #  OS VERSION supported: Ubuntu 14.04 32bit and 64bit
 #
+#  Official website: http://sentora-paranoid.open-source.tk
+#
 #  Author Mario Rodriguez Somohano, sentora-paranoid (at) open-source.tk
 #  based on the original sentora installer script developed by 
 #  Pascal Peyremorte and others.
@@ -184,7 +186,7 @@ if [[ "$STORE_TREE" = "true" ]] ; then
 	if [ -f /usr/bin/tree ] ; then
 		echo "Tree tool is already installed, nice!"
 	else
-		echo "Installing tree required to review file permissions"
+		echo "Installing tree, required to review file permissions"
 		$PACKAGE_INSTALLER tree
 	fi
 fi
@@ -756,6 +758,9 @@ if [[ "$REVERT" = "false" ]] ; then
 		echo "NOTICE: opendkim is configured but be sure to add valid keys, signatures and trusted hosts for each domain or legitimate emails could be marked as BULK or SPAM"
 		mkdir -vp /etc/opendkim/keys/$FQDN
 		/usr/bin/opendkim-genkey -s mail -d /etc/opendkim/keys/$FQDN
+		if [ -f ./mail.private ] ; then
+			mv -v ./mail.{txt,private} /etc/opendkim/keys/$FQDN
+		fi
 		change "-R" "660" $ADMIN_USR opendkim /etc/opendkim/keys/$FQDN
 		change "" "770" $ADMIN_USR opendkim /etc/opendkim/keys/$FQDN
 		# Both services are restarted in amavis-new section
@@ -1492,7 +1497,7 @@ if [[ "$REVERT" = "false" ]] ; then
 		echo " Tree files are located at: $CURRENT_DIR"
 	fi
 	echo ""
-	echo " MySQL: paranoid user pasword is: $PP"
+	echo " MySQL: paranoid user password is: $PP"
 	echo ""
 	echo " For relevant information about security changes please"
 	echo " take a look for the NOTICE messages in log file or using"

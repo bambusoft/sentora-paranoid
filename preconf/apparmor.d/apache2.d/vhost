@@ -1,3 +1,5 @@
+# Author: Mario Rodriguez < sentora-paranoid (at) open-source.tk >
+
 ^vhost {
   #include <abstractions/apache2-common>
 

@@ -506,7 +506,7 @@ if [[ "$REVERT" = "false" ]] ; then
 		$MYSQL -h localhost -u root "-p$RP" -e "$SQL"
 		echo "NOTICE: sentora_postfix database has changed to manage mail quota"
 		Q1="CREATE USER 'paranoid'@'localhost' IDENTIFIED BY '${PP}';"
-		Q2="GRANT ALL PRIVILEGES ON sentora_postfix.mailbox TO 'paranoid'@'localhost';"
+		Q2="GRANT ALL PRIVILEGES ON sentora_postfix . * TO 'paranoid'@'localhost';"
 		Q3="FLUSH PRIVILEGES;"
 		SQL="${Q1}${Q2}${Q3}"
 		$MYSQL -h localhost -u root "-p$RP" -e "$SQL"
@@ -920,8 +920,9 @@ if [[ "$REVERT" = "false" ]] ; then
 
 		# Disable insecure functions 
 		sed -i "s@disable_functions =.*@disable_functions = system,exec,eval,pcntl_alarm,pcntl_fork,pcntl_waitpid,pcntl_wait,pcntl_wifexited,pcntl_wifstopped,pcntl_wifsignaled,pcntl_wexitstatus,pcntl_wtermsig,pcntl_wstopsig,pcntl_signal,pcntl_signal_dispatch,pcntl_get_last_error,pcntl_strerror,pcntl_sigprocmask,pcntl_sigwaitinfo,pcntl_sigtimedwait,pcntl_exec,pcntl_getpriority,pcntl_setpriority@" /etc/php5/apache2/php.ini
-		sed -i "s@disable_functions =.*@disable_functions = system,exec,eval,pcntl_alarm,pcntl_fork,pcntl_waitpid,pcntl_wait,pcntl_wifexited,pcntl_wifstopped,pcntl_wifsignaled,pcntl_wexitstatus,pcntl_wtermsig,pcntl_wstopsig,pcntl_signal,pcntl_signal_dispatch,pcntl_get_last_error,pcntl_strerror,pcntl_sigprocmask,pcntl_sigwaitinfo,pcntl_sigtimedwait,pcntl_exec,pcntl_getpriority,pcntl_setpriority@" /etc/php5/cli/php.ini
-		echo "NOTICE: Functions [system, exec and eval] are disabled, this may cause conflicts whit some php scripts"
+		sed -i "s@disable_functions =.*@disable_functions = exec,eval,pcntl_alarm,pcntl_fork,pcntl_waitpid,pcntl_wait,pcntl_wifexited,pcntl_wifstopped,pcntl_wifsignaled,pcntl_wexitstatus,pcntl_wtermsig,pcntl_wstopsig,pcntl_signal,pcntl_signal_dispatch,pcntl_get_last_error,pcntl_strerror,pcntl_sigprocmask,pcntl_sigwaitinfo,pcntl_sigtimedwait,pcntl_exec,pcntl_getpriority,pcntl_setpriority@" /etc/php5/cli/php.ini
+		echo "NOTICE: Web Functions [system, exec and eval] are disabled, this may cause conflicts whit some web php scripts"
+		echo "NOTICE: Client Functions [exec and eval] are disabled, this may cause conflicts whit some local php scripts"
 		# Do not expose php installed (web only)
 		sed -i "s@expose_php = On@expose_php = Off@" /etc/php5/apache2/php.ini
 		# Reduce error reporting in production web server
@@ -1419,6 +1420,7 @@ if [[ "$REVERT" = "false" ]] ; then
 		fi
 		update-rc.d apparmor defaults
 		rm -v /etc/apparmor.d/disable/usr.sbin.apache2
+		cp -v $SENTORA_PARANOID_CONFIG_PATH/apparmor.d/etc.sentora.panel.bin.zsudo /etc/apparmor.d
 		cp -v $SENTORA_PARANOID_CONFIG_PATH/apparmor.d/usr.sbin.named /etc/apparmor.d
 		cp -v $SENTORA_PARANOID_CONFIG_PATH/apparmor.d/apache2.d/* /etc/apparmor.d/apache2.d
 		change "-R" "g+w" root $APACHE_GRP /etc/apparmor.d/apache2.d

@@ -18,6 +18,8 @@
 #
 #  OS VERSION supported: Ubuntu 14.04 32bit and 64bit
 #
+#  Official website: http://sentora-paranoid.open-source.tk
+#
 #  Modifed by Mario Ricardo Rodriguez Somohano, sentora-paranoid(at)open-source.tk
 #  based on the original SMTP Policy Daemon script developed by 
 #  Simone Caruso, http://www.simonecaruso.com/limit-sender-rate-in-postfix/
@@ -313,7 +315,7 @@ sub print_cache {
 sub daemonize {
 	my ($i,$pid);
 	my $mask = umask 0027;
-	print "sentora-paranoid SMTP Policy Daemon. Logging to $LOGFILE\n";
+	print "sentora-paranoid SMTP Policy Daemon.\n Logging to $LOGFILE\n";
 	#Should i delete this??
 	#$ENV{PATH}="/bin:/usr/bin";
 	#chdir("/");

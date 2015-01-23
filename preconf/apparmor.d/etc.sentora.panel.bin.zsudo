@@ -1,10 +1,7 @@
 # Author: Mario Rodriguez < sentora-paranoid (at) open-source.tk >
 
 #include <tunables/global>
-etc.sentora.panel.bin.zsudo flags=(complain) {
-
-# by now is in very permissive mode, we are working on it....
-  / rw,
-  /** mrwlkix,
-
+/etc/sentora/panel/bin/zsudo flags=(complain) {
+	/etc/sentora/** rw,
+	/var/sentora/** rw,
 }

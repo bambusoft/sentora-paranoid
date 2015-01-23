@@ -15,6 +15,7 @@
 PATH=/bin:/usr/bin:/sbin:/usr/sbin
 DAEMON=/usr/sbin/sp-policyd.pl
 PIDFILE=/var/run/sp-policyd.pl.pid
+LOGFILE=/var/sentora/logs/sp-policyd.log
 
 test -x $DAEMON || exit 0
 
@@ -33,13 +34,18 @@ case "$1" in
     ;;
   restart)
     $0 stop
+	sleep 3
     $0 start
     ;;
   status)
     status_of_proc -p $PIDFILE $DAEMON printshm && exit 0 || exit $?
     ;;
+  clean)
+	truncate -s 0 $LOGFILE
+	log_daemon_msg "Cleaning sp-policyd log file"  "sp-policyd"
+    ;;
   *)
-    echo "Usage: /etc/init.d/sp-policyd {start|stop|restart|status}"
+    echo "Usage: /etc/init.d/sp-policyd {start|stop|restart|status|clean}"
     exit 1
     ;;
 esac

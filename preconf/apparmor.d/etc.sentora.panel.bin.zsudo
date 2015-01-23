@@ -2,6 +2,11 @@
 
 #include <tunables/global>
 /etc/sentora/panel/bin/zsudo flags=(complain) {
+	capability setuid,
+	
+	/etc/ld.so.cache mr,
+	/lib/i386-linux-gnu/** mr,
+	
 	/etc/sentora/** rw,
 	/var/sentora/** rw,
 }

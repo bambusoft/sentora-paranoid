@@ -1,0 +1,210 @@
+#!/bin/sh
+#		Written by Simon Richter <sjr@debian.org>
+#		modified by Jonathan Wiltshire <jmw@debian.org>
+#		with help from Christoph Anton Mitterer
+#		modified by Mario Rodriguez Somohano < sentora-paranoid (at) open-source.tk >
+
+### BEGIN INIT INFO
+# Provides:          iptables-persistent
+# Required-Start:    mountkernfs $local_fs
+# Required-Stop:     $local_fs
+# Default-Start:     2 3 4 5
+# Default-Stop:      0 1 6
+# X-Start-Before:    $network
+# X-Stop-After:      $network
+# Short-Description: Set up iptables rules (including default ipset blacklists)
+# Description:       Loads/saves current iptables rules from/to /etc/iptables
+#  to provide a persistent rule set during boot time
+### END INIT INFO
+
+. /lib/lsb/init-functions
+
+rc=0
+
+if [ ! -f /var/log/iptables.log ]; then
+	touch /var/log/iptables.log
+	chmod 660 /var/log/iptables.log
+fi
+date >> /var/log/iptables.log
+
+reinit_ipset()
+{
+	if [ -f /sbin/ipset ]; then
+		log_action_begin_msg "Reinitializing ipset blacklists"
+		echo "- Reinitializing ipset blacklists" >> /var/log/iptables.log
+		ipset destroy BLACKLIST_IP -q 2>> /var/log/iptables.log
+		ipset create BLACKLIST_IP hash:ip hashsize 2048 -q 2>> /var/log/iptables.log
+		ipset flush BLACKLIST_IP 2>> /var/log/iptables.log
+		ipset destroy BLACKLIST_NET -q 2>> /var/log/iptables.log
+		ipset create BLACKLIST_NET hash:net hashsize 1024 -q 2>> /var/log/iptables.log
+		ipset flush BLACKLIST_NET 2>> /var/log/iptables.log
+		ipset add BLACKLIST_IP 176.31.61.1 2>> /var/log/iptables.log
+		ipset add BLACKLIST_NET 176.31.61.0/28 2>> /var/log/iptables.log
+	fi
+}
+
+restart_fail2ban() {
+	#restarting fail2ban
+	if [ -f /etc/init.d/fail2ban ]; then
+		log_action_begin_msg "Reinitializing fail2ban"
+		echo "- Reinitializing fail2ban" >> /var/log/iptables.log
+		/etc/init.d/fail2ban restart 2>> /var/log/iptables.log
+	fi
+}
+
+load_rules()
+{
+
+	reinit_ipset
+	
+	log_action_begin_msg "Loading iptables rules"
+
+	#load IPv4 rules
+	if [ ! -f /etc/iptables/rules.v4 ]; then
+		log_action_cont_msg " skipping IPv4 (no rules to load)"
+		echo " skipping IPv4 (no rules to load)" >> /var/log/iptables.log
+	else
+		log_action_cont_msg " IPv4"
+		echo " Restoring IPv4 rules" >> /var/log/iptables.log
+		iptables-restore < /etc/iptables/rules.v4 2>> /var/log/iptables.log
+		if [ $? -ne 0 ]; then
+			rc=1
+		fi
+	fi
+
+	#load IPv6 rules	
+	if [ ! -f /etc/iptables/rules.v6 ]; then
+		log_action_cont_msg " skipping IPv6 (no rules to load)"
+	else
+		log_action_cont_msg " IPv6"
+		echo "Restoring IPv6 rules" >> /var/log/iptables.log
+		ip6tables-restore < /etc/iptables/rules.v6 2>> /var/log/iptables.log
+		if [ $? -ne 0 ]; then
+			rc=1
+		fi
+	fi
+	
+	log_action_end_msg $rc
+}
+
+save_rules()
+{
+	log_action_begin_msg "Saving rules"
+
+	#save IPv4 rules
+	#need at least iptable_filter loaded:
+	/sbin/modprobe -q iptable_filter 2>> /var/log/iptables.log
+	if [ ! -f /proc/net/ip_tables_names ]; then
+		log_action_cont_msg " skipping IPv4 (no modules loaded)"
+		echo " skipping IPv4 (no modules loaded)" >> /var/log/iptables.log
+	elif [ -x /sbin/iptables-save ]; then
+		log_action_cont_msg " IPv4"
+		echo " Saving IPv4 rules" 2>> /var/log/iptables.log
+		iptables-save > /etc/iptables/rules.v4 >> /var/log/iptables.log
+		if [ $? -ne 0 ]; then
+			rc=1
+		fi
+	fi
+
+	#save IPv6 rules
+	#need at least ip6table_filter loaded:
+	/sbin/modprobe -q ip6table_filter 2>> /var/log/iptables.log
+	if [ ! -f /proc/net/ip6_tables_names ]; then
+		log_action_cont_msg " skipping IPv6 (no modules loaded)"
+		echo " skipping IPv6 (no modules loaded)" >> /var/log/iptables.log
+	elif [ -x /sbin/ip6tables-save ]; then
+		log_action_cont_msg " IPv6"
+		echo "Saving IPv6 rules" >> /var/log/iptables.log
+		ip6tables-save > /etc/iptables/rules.v6 2>> /var/log/iptables.log
+		if [ $? -ne 0 ]; then
+			rc=1
+		fi
+	fi
+
+	log_action_end_msg $rc
+}
+
+flush_rules()
+{
+	log_action_begin_msg "Flushing rules"
+
+	if [ ! -f /proc/net/ip_tables_names ]; then
+		log_action_cont_msg " skipping IPv4 (no module loaded)"
+		echo " skipping IPv4 (no module loaded)" >> /var/log/iptables.log
+	elif [ -x /sbin/iptables ]; then
+		log_action_cont_msg " IPv4"
+		echo " IPv4" >> /var/log/iptables.log
+		for param in F Z X; do /sbin/iptables -$param; done
+		for table in $(cat /proc/net/ip_tables_names)
+		do
+			/sbin/iptables -t $table -F 2>> /var/log/iptables.log
+			/sbin/iptables -t $table -Z 2>> /var/log/iptables.log
+			/sbin/iptables -t $table -X 2>> /var/log/iptables.log
+		done
+		for chain in INPUT FORWARD OUTPUT
+		do
+			/sbin/iptables -P $chain ACCEPT
+		done
+	fi
+	
+	if [ ! -f /proc/net/ip6_tables_names ]; then
+		log_action_cont_msg " skipping IPv6 (no module loaded)"
+		echo " skipping IPv4 (no module loaded)" >> /var/log/iptables.log
+	elif [ -x /sbin/ip6tables ]; then
+		log_action_cont_msg " IPv6"
+		echo " IPv6" >> /var/log/iptables.log
+		for param in F Z X; do /sbin/ip6tables -$param; done
+		for table in $(cat /proc/net/ip6_tables_names)
+		do
+			/sbin/ip6tables -t $table -F 2>> /var/log/iptables.log
+			/sbin/ip6tables -t $table -Z 2>> /var/log/iptables.log
+			/sbin/ip6tables -t $table -X 2>> /var/log/iptables.log
+		done
+		for chain in INPUT FORWARD OUTPUT
+		do
+			/sbin/ip6tables -P $chain ACCEPT
+		done
+	fi
+
+	reinit_ipset
+	
+	log_action_end_msg 0
+}
+
+clean()
+{
+	log_action_cont_msg "Cleaning iptables logfile"
+	if [ -f /var/log/iptables.log ]; then
+		truncate -s 0 /var/log/iptables.log 2>> /var/log/iptables.log
+	fi
+	log_action_end_msg $rc
+}
+
+case "$1" in
+start|restart|reload|force-reload)
+	load_rules	
+	restart_fail2ban
+	;;
+save)
+	save_rules
+	;;
+stop)
+	# Why? because if stop is used, the firewall gets flushed for a variable
+	# amount of time during package upgrades, leaving the machine vulnerable
+	# It's also not always desirable to flush during purge
+	echo "Automatic flushing disabled, use \"flush\" instead of \"stop\""
+	;;
+flush)
+	flush_rules
+	restart_fail2ban
+	;;
+clean)
+	clean
+	;;
+*)
+    echo "Usage: $0 {start|restart|reload|force-reload|save|flush|clean}" >&2
+    exit 1
+    ;;
+esac
+
+exit $rc

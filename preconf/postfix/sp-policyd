@@ -42,7 +42,8 @@ case "$1" in
     ;;
   clean)
 	truncate -s 0 $LOGFILE
-	log_daemon_msg "Cleaning sp-policyd log file"  "sp-policyd"
+	log_daemon_msg "Cleaning log file"  "sp-policyd"
+	log_end_msg $?
     ;;
   *)
     echo "Usage: /etc/init.d/sp-policyd {start|stop|restart|status|clean}"

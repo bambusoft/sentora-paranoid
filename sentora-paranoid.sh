@@ -563,9 +563,11 @@ if [[ "$REVERT" = "false" ]] ; then
 	change "" "755" root root $PANEL_PATH/configs
 	change "" "755" root root $PANEL_PATH/docs
 	change "" "755" root root $PANEL_PATH/panel
+	change "-R" "775" $ADM_USR $HTTP_GROUP $PANEL_PATH/panel/modules/webalyzer_stats/stats
 	echo "NOTICE: $PANEL_PATH file permissions changed, this will affect core and module updates"
 	# PANEL DATA
-	change "-R" "775" www-data www-data $PANEL_DATA
+	change "-R" "775" $HTTP_USER $HTTP_GROUP $PANEL_DATA
+	change "" "775" vmail mail $PANEL_DATA/sieve
 	change "" "775" vmail mail $PANEL_DATA/vmail
 	echo "NOTICE: $PANEL_DATA file permissions changed, this will affect users directories"
 else
@@ -686,6 +688,12 @@ if [[ "$REVERT" = "false" ]] ; then
 		sed -i "s@#smtpd_tls_key_file@smtpd_tls_key_file = $SENTORA_PARANOID_CONFIG_PATH/openssl/keys/${FQDN}.key\n#@" $PANEL_PATH/configs/postfix/main.cf
 		sed -i "s@#smtpd_tls_cert_file@smtpd_tls_cert_file = $SENTORA_PARANOID_CONFIG_PATH/openssl/certs/${FQDN}.crt\n#@" $PANEL_PATH/configs/postfix/main.cf
 		sed -i "s@#smtpd_tls_CAfile@smtpd_tls_CAfile = $SENTORA_PARANOID_CONFIG_PATH/openssl/certs/root-ca.crt@" $PANEL_PATH/configs/postfix/main.cf
+		sed -i "s@pickup@smtps inet n - n - - smtpd\n -o smtpd_tls_wrappermode=yes -o smtpd_sasl_auth_enable=yes\npickup@" $PANEL_PATH/configs/postfix/master.cf
+		#
+		# Add this into documentation not here
+		# To test TLS in your server
+		# > openssl s_client -starttls smtp -crlf -connect YOUR_SERVER:25
+		#
 		# sentora paranoid policy daemon script
 		sed -i "s@smtpd_data_restrictions = reject_unauth_pipelining@smtpd_data_restrictions = reject_unauth_pipelining, check_policy_service inet:127.0.0.1:24@" $PANEL_PATH/configs/postfix/main.cf
 		cp -v $SENTORA_PARANOID_CONFIG_PATH/postfix/sp-policyd.pl $SENTORA_PARANOID_CONFIG_PATH/postfix/sp-policyd.pl.orig
@@ -880,6 +888,11 @@ if [[ "$REVERT" = "false" ]] ; then
 			echo "auth_verbose = yes" >> $PANEL_PATH/configs/dovecot2/dovecot.conf			
 			echo "auth_debug = yes" >> $PANEL_PATH/configs/dovecot2/dovecot.conf			
 		fi
+		# Enable SSL
+		sed -i "s@ssl = no@ssl = yes\nssl_cert = <$SENTORA_PARANOID_CONFIG_PATH/openssl/certs/${FQDN}.crt\nssl_key = <$SENTORA_PARANOID_CONFIG_PATH/openssl/keys/${FQDN}-nophrase.key@" $PANEL_PATH/configs/dovecot2/dovecot.conf
+		# Add examples into documentation not here
+		# sieve flters http://wiki2.dovecot.org/Pigeonhole/Sieve/Examples
+		cp -v $SENTORA_PARANOID_CONFIG_PATH/dovecot2/globalfilter.sieve $PANEL_PATH/configs/dovecot2
 		# File permissions
 		change "-R" "g+w" root $ADMIN_GRP /etc/dovecot/conf.d
 		change "-R" "g+w" root $ADMIN_GRP $PANEL_PATH/configs/dovecot2
@@ -966,7 +979,7 @@ else
 fi
 
 #====================================================================================
-#--- suphp must/should be (re)enabled with sentora environment?
+#--- suExec must/should be (re)enabled with sentora environment?
 # To be revised and may be included in future versions
 if [[ "$REVERT" = "false" ]] ; then
 	if [[ "$OS" = "Ubuntu" ]]; then
@@ -1166,6 +1179,10 @@ if [[ "$REVERT" = "false" ]] ; then
 		fi
 		# We are not sure if the administrator email exists and if it is necesary to change this email use next command
 		# sed -i "s/root@localhost/$ADMIN_USR@$FQDN/" $PANEL_PATH/configs/proftpd/proftpd-mysql.conf
+		#
+		# Do not tell to much about what software are you running
+		sed -i "s/Sentora FTP Server/Nice FTP Server/" $PANEL_PATH/configs/proftpd/proftpd-mysql.conf
+		#
 		# Enable sftp
 		if ! grep -q "LoadModule mod_sftp.c" $PANEL_PATH/configs/proftpd/proftpd-mysql.conf ; then
 			echo "NOTICE: sftp enabled to listen in default port 115"
@@ -1265,7 +1282,7 @@ else
 fi
 
 #====================================================================================
-#--- ipset
+#--- ipset to set IP blacklists
 echo -e "\n-- ipset security"
 if [[ "$REVERT" = "false" ]] ; then
 	if [[ "$OS" = "Ubuntu" ]]; then
@@ -1310,13 +1327,14 @@ else
 		iptables -A OUTPUT -j ACCEPT
 		iptables -A INPUT -m state --state INVALID -j DROP
 		iptables -A INPUT -p tcp --dport 21 -j ACCEPT
+		iptables -A INPUT -p tcp --dport 25 -j ACCEPT
 		iptables -A INPUT -p tcp --dport 53 -j ACCEPT
 		iptables -A INPUT -p udp --dport 53 -j ACCEPT
 		iptables -A INPUT -p tcp --dport 80 -j ACCEPT
-		iptables -A INPUT -p tcp --dport 443 -j ACCEPT
-		iptables -A INPUT -p tcp --dport 25 -j ACCEPT
-		iptables -A INPUT -p tcp --dport 465 -j ACCEPT
 		iptables -A INPUT -p tcp --dport 110 -j ACCEPT
+		iptables -A INPUT -p tcp --dport 115 -j ACCEPT
+		iptables -A INPUT -p tcp --dport 465 -j ACCEPT
+		iptables -A INPUT -p tcp --dport 443 -j ACCEPT
 		iptables -A INPUT -p tcp --dport 995 -j ACCEPT
 		iptables -A INPUT -p tcp -m state --state NEW --dport $SSHD_PORT -j ACCEPT
 		iptables -A INPUT -p icmp -m icmp --icmp-type 8 -j ACCEPT --match limit --limit 30/minute
@@ -1335,13 +1353,14 @@ else
 		ip6tables -A INPUT -i eth0 -p ipv6 -j ACCEPT 
 		ip6tables -A OUTPUT -o eth0 -p ipv6 -j ACCEPT 
 		ip6tables -A INPUT -p tcp --dport 21 -j ACCEPT
+		ip6tables -A INPUT -p tcp --dport 25 -j ACCEPT
 		ip6tables -A INPUT -p tcp --dport 53 -j ACCEPT
 		ip6tables -A INPUT -p udp --dport 53 -j ACCEPT
 		ip6tables -A INPUT -p tcp --dport 80 -j ACCEPT
-		ip6tables -A INPUT -p tcp --dport 443 -j ACCEPT
-		ip6tables -A INPUT -p tcp --dport 25 -j ACCEPT
-		ip6tables -A INPUT -p tcp --dport 465 -j ACCEPT
 		ip6tables -A INPUT -p tcp --dport 110 -j ACCEPT
+		ip6tables -A INPUT -p tcp --dport 115 -j ACCEPT
+		ip6tables -A INPUT -p tcp --dport 443 -j ACCEPT
+		ip6tables -A INPUT -p tcp --dport 465 -j ACCEPT
 		ip6tables -A INPUT -p tcp --dport 995 -j ACCEPT
 		ip6tables -A INPUT -p tcp -m state --state NEW --dport $SSHD_PORT -j ACCEPT
 		ip6tables -A INPUT -p icmpv6 -j ACCEPT
@@ -1360,6 +1379,9 @@ if [[ "$OS" = "Ubuntu" ]]; then
 	fi
 	iptables-save > /etc/iptables/rules.v4
 	ip6tables-save > /etc/iptables/rules.v6
+	if [ -d $SENTORA_PARANOID_CONFIG_PATH/iptables ] ; then
+		cp -v $SENTORA_PARANOID_CONFIG_PATH/iptables/iptables-persistent /etc/init.d/iptables-persistent
+	fi
 fi
 
 #====================================================================================
@@ -1451,9 +1473,11 @@ else
 fi
 
 #====================================================================================
-#--- If revert remove sentora-paranoid preconf directory from site
+#--- Restart firewall (ipset+iptables+faail2ban) and if revert remove sentora-paranoid preconf directory from site
 if [[ "$REVERT" = "false" ]] ; then
-	true
+	if [ -f /etc/init.d/iptables-persistent ]; then
+		/etc/init.d/iptables-persistent restart
+	fi
 else
 	echo -e "\n-- Removing sentora-paranoid preconf directory"
 	if [ -d $SENTORA_PARANOID_CONFIG_PATH ] ; then

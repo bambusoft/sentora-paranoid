@@ -17,10 +17,10 @@
 -A INPUT -m state --state INVALID -j DROP
 
 # Block unwanted IPs/Nets via ipset
-#-A INPUT -m set --match-set BLACKLIST_IP src -j LOG --log-prefix "sentora-paranoid ip6 denied: " --log-level 7
--A INPUT -m set --match-set BLACKLIST_IP src -j REJECT --reject-with icmp6-adm-prohibited
-#-A INPUT -m set --match-set BLACKLIST_NET src -j LOG --log-prefix "sentora-paranoid net denied: " --log-level 7
--A INPUT -m set --match-set BLACKLIST_NET src -j REJECT --reject-with icmp6-adm-prohibited
+#-A INPUT -m set --match-set BLACKLIST_IP6 src -j LOG --log-prefix "sentora-paranoid ip6 denied: " --log-level 7
+-A INPUT -m set --match-set BLACKLIST_IP6 src -j REJECT --reject-with icmp6-adm-prohibited
+#-A INPUT -m set --match-set BLACKLIST_NET6 src -j LOG --log-prefix "sentora-paranoid net denied: " --log-level 7
+-A INPUT -m set --match-set BLACKLIST_NET6 src -j REJECT --reject-with icmp6-adm-prohibited
 
 # Accept incoming and outgoing IPv6-in-IPv4 on interface eth0
 -A INPUT -i eth0 -p ipv6 -j ACCEPT 

@@ -39,7 +39,7 @@ if [[ "$1" = "clean" ]] ; then
 fi
 
 SENTORA_PARANOID_VERSION="1.0.0-dev-snapshot"	# This installer version
-SENTORA_INSTALLER_VERSION="1.0.0-RC1"	# Script version used to install sentora
+SENTORA_INSTALLER_VERSION="1.0.0-RC2"	# Script version used to install sentora
 SENTORA_CORE_VERSION="1.0.0-RC1"		# Sentora core versión
 SENTORA_PRECONF_VERSION="1.0.0-RC1"		# Preconf used by sentora script installer
 
@@ -50,6 +50,10 @@ COLOR_RED="\e[1;31m"
 COLOR_GRN="\e[1;32m"
 COLOR_YLW="\e[1;33m"
 COLOR_END="\e[0m"
+
+STORE_TREE="false"
+INSTALL_MTA_CF="true"
+INSTALL_ARMOR="true"
 
 change() {
 	# $1=[-R|blank] $2=permissions $3=usr $4=grp $5=[file|path]
@@ -72,14 +76,16 @@ check_status() {
 	echo "sp-policyd: $status"
 	status=$(service opendkim status)
 	echo "Opendkim: $status"
-	status=$(/etc/init.d/amavis status)
-	echo "amavis-new: $status"
-	status=$(service spamassassin status)
-	echo "Spamassassin: $status"
-	status=$(service clamav-daemon status)
-	echo "Clamav: $status"
-	status=$(service clamav-freshclam status)
-	echo "Fresh Clamav: $status"
+	if [ -d /etc/amavis ] ; then
+		status=$(/etc/init.d/amavis status)
+		echo "amavis-new: $status"
+		status=$(service spamassassin status)
+		echo "Spamassassin: $status"
+		status=$(service clamav-daemon status)
+		echo "Clamav: $status"
+		status=$(service clamav-freshclam status)
+		echo "Fresh Clamav: $status"
+	fi
 	status=$(apache2ctl -M | grep "php5")
 	echo "PHP: $status"
 	status=$(service apache2 status)
@@ -98,11 +104,11 @@ check_status() {
 	echo "iptables: $status"
 	status=$(service fail2ban status | grep "is")
 	echo "fail2ban: $status"
-	status=$(apparmor_status)
-	echo "apparmor: $status"
+	if [ -d /etc/apparmor.d ] ; then
+		status=$(apparmor_status)
+		echo "apparmor: $status"
+	fi
 }
-
-STORE_TREE="true"
 
 save_tree() {
 	# $1 path to save $2 ext
@@ -112,6 +118,11 @@ save_tree() {
 	fi
 }
 
+passwordgen() {
+    l=$1
+    [ "$l" == "" ] && l=16
+    tr -dc A-Za-z0-9 < /dev/urandom | head -c ${l} | xargs
+}
 
 #====================================================================================
 #--- Display the 'welcome' splash/user warning info..
@@ -246,9 +257,10 @@ else
 fi
 
 #====================================================================================
-# Obtain current user/group and administrator(sudoer) user/group
+# Obtain important user input
 datfile=sentora-paranoid.dat
 if [[ "$REVERT" = "false" ]] ; then
+	# Current user/group and administrator(sudoer) user/group
 	echo "Some installations require more security than others, you may want to"
 	echo "have an unprivileged user to change configurations only, or you want to"
 	echo "have more than one administrator all of them belonging to an administration"
@@ -290,7 +302,6 @@ if [[ "$REVERT" = "false" ]] ; then
 	echo -e "Using:$COLOR_GRN $ADMIN_USR : $ADMIN_GRP $COLOR_END as the administrative username:groupame"
 	echo "ADMIN_USR:$ADMIN_USR" > $datfile
 	echo "ADMIN_GRP:$ADMIN_GRP" >> $datfile
-	
 else
 	ADMIN_USR=$(grep "ADMIN_USR" $datfile | sed "s@ADMIN_USR:@@")
 	ADMIN_GRP=$(grep "ADMIN_GRP" $datfile | sed "s@ADMIN_GRP:@@")
@@ -459,28 +470,65 @@ if [[ "$OS" = "Ubuntu" ]]; then
 	fi
 fi
 # WARNING: At this point firewall is accepting everything and fail2ban is down
-
+	
 #====================================================================================
 #--- Install or remove used packages
 if [[ "$REVERT" = "false" ]] ; then
+	# Ask for install optional MTA packages
+	echo ""
+	while true; do
+		echo ""
+		read -e -p "Do you wish to install MTA virus scanner and content filters: (Y/n)? " -i 'y' answer
+		case $answer in
+			[Yy]* ) INSTALL_MTA_CF="true"
+					break
+					;;
+			[Nn]* ) INSTALL_MTA_CF="false"
+					break
+					;;
+		esac
+	done	
+	# Ask for install optional apparmor packages
+	echo ""
+	while true; do
+		echo ""
+		read -e -p "Do you wish to install apparmor: (Y/n)? " -i 'y' answer
+		case $answer in
+			[Yy]* ) INSTALL_ARMOR="true"
+					break
+					;;
+			[Nn]* ) INSTALL_ARMOR="false"
+					break
+					;;
+		esac
+	done	
+
 	if [[ "$OS" = "Ubuntu" ]]; then
 		echo -e "\n-- Downloading and installing required tools..."
-		$PACKAGE_INSTALLER openssl iptables iptables-persistent fail2ban apparmor apparmor-utils libapache2-mod-apparmor ipset 
-		$PACKAGE_INSTALLER opendkim opendkim-tools amavisd-new spamassassin spamc clamav clamav-base libclamav6 clamav-daemon clamav-freshclam
-		$PACKAGE_INSTALLER libswitch-perl libnet-dns-perl libmail-spf-perl pyzor razor arj bzip2 cabextract cpio file gzip nomarch pax rar unrar unzip zip
+		$PACKAGE_INSTALLER openssl iptables iptables-persistent fail2ban ipset opendkim opendkim-tools
+		$PACKAGE_INSTALLER libswitch-perl libnet-dns-perl libmail-spf-perl
+		if [[ "$INSTALL_MTA_CF" = "true" ]]; then
+			$PACKAGE_INSTALLER amavisd-new spamassassin spamc clamav clamav-base libclamav6 clamav-daemon clamav-freshclam pyzor razor
+			$PACKAGE_INSTALLER arj bzip2 cabextract cpio file gzip nomarch pax rar unrar unzip zip
+		fi
 		# Do not install apparmor-profiles unless you really know what are you doing
+		if [[ "$INSTALL_ARMOR" = "true" ]]; then
+			$PACKAGE_INSTALLER apparmor apparmor-utils libapache2-mod-apparmor
+		fi
 	fi
 else
 	if [[ "$OS" = "Ubuntu" ]]; then
 		echo -e "\n-- Removing installed tools..."
-		$PACKAGE_REMOVER fail2ban libapache2-mod-apparmor
-		$PACKAGE_REMOVER opendkim opendkim-tools amavisd-new spamassassin spamc clamav clamav-base libclamav6 clamav-daemon clamav-freshclam
+		$PACKAGE_REMOVER fail2ban libapache2-mod-apparmor opendkim opendkim-tools
+		if [[ "$INSTALL_MTA_CF" = "true" ]]; then
+			$PACKAGE_REMOVER amavisd-new spamassassin spamc clamav clamav-base libclamav6 clamav-daemon clamav-freshclam pyzor razor 
+		fi
 		# Remove iptables is a bad idea, we will set to minimal(required) open ports later
 		# Remove ipset is a bad idea we flush lists later
 		# Remove apparmor is a bad idea, we will set to minimal(complain) rules later
-		# If you really need to disable apparmor then use:
-		#	sudo service apparmor stop
-		#	sudo update-rc.d -f apparmor remove
+		# Disable apparmor:
+		service apparmor stop
+		update-rc.d -f apparmor remove
 	fi
 fi
 
@@ -490,7 +538,7 @@ echo -e "\n-- Sentora security"
 PWDFILE="$PANEL_PATH/panel/cnf/db.php"
 MYSQL=`which mysql`
 RP=$(grep "pass" $PWDFILE | sed -e "s@\$pass = '@@" -e "s@';@@")
-PP="$$sp$$"
+PP=$(passwordgen);
 if [[ "$REVERT" = "false" ]] ; then
 	if [[ "$OS" = "Ubuntu" ]]; then
 		Q1="USE sentora_core;"
@@ -563,7 +611,8 @@ if [[ "$REVERT" = "false" ]] ; then
 	change "" "755" root root $PANEL_PATH/configs
 	change "" "755" root root $PANEL_PATH/docs
 	change "" "755" root root $PANEL_PATH/panel
-	change "-R" "775" $ADM_USR $HTTP_GROUP $PANEL_PATH/panel/modules/webalyzer_stats/stats
+	mkdir -vp $PANEL_PATH/panel/modules/webalizer_stats/stats
+	change "-R" "775" $ADMIN_USR $HTTP_GROUP $PANEL_PATH/panel/modules/webalizer_stats/stats
 	echo "NOTICE: $PANEL_PATH file permissions changed, this will affect core and module updates"
 	# PANEL DATA
 	change "-R" "775" $HTTP_USER $HTTP_GROUP $PANEL_DATA
@@ -621,21 +670,23 @@ fi
 echo -e "\n-- Openssl certificates"
 if [[ "$REVERT" = "false" ]] ; then
 	if [[ "$OS" = "Ubuntu" ]]; then
+		SSL_PASS=$(passwordgen);
 		echo "Creating new CA please enter a new rootCA password and requested data"
-		openssl genrsa -des3 -out $SENTORA_PARANOID_CONFIG_PATH/openssl/keys/root-ca.key 2048 -config $SENTORA_PARANOID_CONFIG_PATH/openssl/openssl.cnf
+		openssl genrsa -des3 -passout pass:$SSL_PASS -out $SENTORA_PARANOID_CONFIG_PATH/openssl/keys/root-ca.key 2048 -config $SENTORA_PARANOID_CONFIG_PATH/openssl/openssl.cnf
 		echo "Generating root-ca certificate please provide previously rootCA password"
-		openssl req -new -x509 -days 365 -subj "/C=MX/ST=Jalisco/L=Guadalajara/O=Sentora Paranoid Ltd/OU=Sentora Paranoid Certification Authority/CN=sentora-paranoid/emailAddress=root@${FQDN}" -key $SENTORA_PARANOID_CONFIG_PATH/openssl/keys/root-ca.key -out $SENTORA_PARANOID_CONFIG_PATH/openssl/certs/root-ca.crt -config $SENTORA_PARANOID_CONFIG_PATH/openssl/openssl.cnf
+		openssl req -new -x509 -passin pass:$SSL_PASS -days 365 -subj "/C=MX/ST=Jalisco/L=Guadalajara/O=Sentora Paranoid Ltd/OU=Sentora Paranoid Certification Authority/CN=sentora-paranoid/emailAddress=root@${FQDN}" -key $SENTORA_PARANOID_CONFIG_PATH/openssl/keys/root-ca.key -out $SENTORA_PARANOID_CONFIG_PATH/openssl/certs/root-ca.crt -config $SENTORA_PARANOID_CONFIG_PATH/openssl/openssl.cnf
 		echo "Generating root-ca PEM files please provide previously rootCA password"
 		openssl x509 -inform PEM -in $SENTORA_PARANOID_CONFIG_PATH/openssl/certs/root-ca.crt > $SENTORA_PARANOID_CONFIG_PATH/openssl/certs/root-ca.pem
-		openssl rsa -in $SENTORA_PARANOID_CONFIG_PATH/openssl/keys/root-ca.key -text > $SENTORA_PARANOID_CONFIG_PATH/openssl/keys/root-ca.pem
+		openssl rsa -passin pass:$SSL_PASS -in $SENTORA_PARANOID_CONFIG_PATH/openssl/keys/root-ca.key -text > $SENTORA_PARANOID_CONFIG_PATH/openssl/keys/root-ca.pem
 		echo "Generating server: $FQDN certificate request"
 		openssl req -newkey rsa:2048  -subj "/C=MX/ST=Jalisco/L=Guadalajara/O=Sentora Paranoid Ltd/OU=Sentora Paranoid Certification Authority/CN=${FQDN}/emailAddress=root@${FQDN}" -keyout $SENTORA_PARANOID_CONFIG_PATH/openssl/keys/${FQDN}.key -nodes -out $SENTORA_PARANOID_CONFIG_PATH/openssl/requests/${FQDN}.req -config $SENTORA_PARANOID_CONFIG_PATH/openssl/openssl.cnf
-		echo "Generating server: $FQDN certificate, please sign and commit"
-		openssl ca -config $SENTORA_PARANOID_CONFIG_PATH/openssl/openssl.cnf -days 365 -out $SENTORA_PARANOID_CONFIG_PATH/openssl/certs/${FQDN}.crt -infiles $SENTORA_PARANOID_CONFIG_PATH/openssl/requests/${FQDN}.req
+		echo "Generating server: $FQDN certificate"
+		printf 'y\ny\n' | openssl ca -passin pass:$SSL_PASS -config $SENTORA_PARANOID_CONFIG_PATH/openssl/openssl.cnf -days 365 -out $SENTORA_PARANOID_CONFIG_PATH/openssl/certs/${FQDN}.crt -infiles $SENTORA_PARANOID_CONFIG_PATH/openssl/requests/${FQDN}.req
 		echo "Supressing $FQDN certificate password for apache"
 		openssl rsa -in $SENTORA_PARANOID_CONFIG_PATH/openssl/keys/${FQDN}.key -out $SENTORA_PARANOID_CONFIG_PATH/openssl/keys/${FQDN}-nophrase.key
-		change "-R" "600" root root $SENTORA_PARANOID_CONFIG_PATH/openssl
-		echo "NOTICE: Dummy certificate for CA and server was created, you need to provide self signed certificates or use a valid certificates"
+		find $SENTORA_PARANOID_CONFIG_PATH/openssl -type d -exec chmod 700 {} +
+		find $SENTORA_PARANOID_CONFIG_PATH/openssl -type f -exec chmod 600 {} +
+		echo "NOTICE: Dummy certificates for CA and server was created, you need to provide self signed certificates or use a valid certificates"
 	fi
 fi
 
@@ -772,8 +823,8 @@ if [[ "$REVERT" = "false" ]] ; then
 		change "-R" "660" $ADMIN_USR opendkim /etc/opendkim/keys/$FQDN
 		change "" "770" $ADMIN_USR opendkim /etc/opendkim/keys/$FQDN
 		# Both services are restarted in amavis-new section
-		#service postfix restart
-		#service opendkim restart
+		service postfix restart
+		service opendkim restart
 	fi
 fi
 
@@ -781,15 +832,17 @@ fi
 #--- spamassasin 
 echo -e "\n-- Spamassassin"
 if [[ "$REVERT" = "false" ]] ; then
-	if [[ "$OS" = "Ubuntu" ]]; then
-		sed -i "s@ENABLED=0@ENABLED=1@" /etc/default/spamassassin	
-		sed -i "s@CRON=0@CRON=1@" /etc/default/spamassassin	
-		sed -i "s@# rewrite_header@rewrite_header Subject [SPAM] # @" /etc/spamassassin/local.cf
-		sed -i "s@# required_score@required_score 3.0 # @" /etc/spamassassin/local.cf
-		sed -i "s@# use_bayes@use_bayes@" /etc/spamassassin/local.cf
-		sed -i "s@# bayes_auto_learn@bayes_auto_learn@" /etc/spamassassin/local.cf
-		# This service is restarted later in amavis-new section
-		#service spamassassin restart
+	if [[ "$INSTALL_MTA_CF" = "true" ]]; then
+		if [[ "$OS" = "Ubuntu" ]]; then
+			sed -i "s@ENABLED=0@ENABLED=1@" /etc/default/spamassassin	
+			sed -i "s@CRON=0@CRON=1@" /etc/default/spamassassin	
+			sed -i "s@# rewrite_header@rewrite_header Subject [SPAM] # @" /etc/spamassassin/local.cf
+			sed -i "s@# required_score@required_score 3.0 # @" /etc/spamassassin/local.cf
+			sed -i "s@# use_bayes@use_bayes@" /etc/spamassassin/local.cf
+			sed -i "s@# bayes_auto_learn@bayes_auto_learn@" /etc/spamassassin/local.cf
+			# This service is restarted later in amavis-new section
+			#service spamassassin restart
+		fi
 	fi
 fi
 
@@ -797,11 +850,13 @@ fi
 #--- clamav 
 echo -e "\n-- clamav"
 if [[ "$REVERT" = "false" ]] ; then
-	if [[ "$OS" = "Ubuntu" ]]; then
-		adduser clamav amavis
-		# Both services are restarted in amavis-new section
-		#service clamav-daemon restart
-		#service clamav-freshclam restart
+	if [[ "$INSTALL_MTA_CF" = "true" ]]; then
+		if [[ "$OS" = "Ubuntu" ]]; then
+			adduser clamav amavis
+			# Both services are restarted in amavis-new section
+			#service clamav-daemon restart
+			#service clamav-freshclam restart
+		fi
 	fi
 fi
 
@@ -809,65 +864,67 @@ fi
 #--- amavis-new
 echo -e "\n-- amavis-new"
 if [[ "$REVERT" = "false" ]] ; then
-	if [[ "$OS" = "Ubuntu" ]]; then
-		adduser amavis clamav
-		sed -i "s@1;@@" /etc/amavis/conf.d/15-content_filter_mode
-		echo "@bypass_virus_checks_maps = (" /etc/amavis/conf.d/15-content_filter_mode
-		echo " \%bypass_virus_checks, \@bypass_virus_checks_acl, \$bypass_virus_checks_re);" /etc/amavis/conf.d/15-content_filter_mode
-		echo "@bypass_spam_checks_maps = (" /etc/amavis/conf.d/15-content_filter_mode
-		echo " \%bypass_spam_checks, \@bypass_spam_checks_acl, \$bypass_spam_checks_re);" /etc/amavis/conf.d/15-content_filter_mode
-		echo "1;"
-		AMAVISC="/etc/amavis/conf.d/50-user"
-		echo "use strict;" > $AMAVISC
-		echo "@local_domains_acl = qw(.);" >> $AMAVISC
-		echo "\$log_level = 2;" >> $AMAVISC	# Change to 1 to reduce login details
-		echo "\$syslog_priority = 'debug';" >> $AMAVISC # Change to 'info' to reduce login details
-		echo "# \$sa_tag_level_deflt = 2.0; # add spam info headers if at, or above that level" >> $AMAVISC
-		echo "# \$sa_tag2_level_deflt = 6.31; # add 'spam detected' headers at that level" >> $AMAVISC
-		echo "\$sa_kill_level_deflt = 8.0; # triggers spam evasive actions" >> $AMAVISC
-		echo "# \$sa_dsn_cutoff_level = 10; # spam level beyond which a DSN is not sent" >> $AMAVISC
-		echo "# \$final_spam_destiny = D_PASS;" >> $AMAVISC
-		echo "# \$final_spam_destiny = D_REJECT; # default " >> $AMAVISC
-		echo "\$final_spam_destiny = D_BOUNCE; # debian default " >> $AMAVISC # Change to D_DISCARD when things were going well
-		echo "# \$final_spam_destiny = D_DISCARD; # ubuntu default, recommended as sender is usually faked" >> $AMAVISC
-		echo "1;" >> $AMAVISC
-		if ! grep -q "smtp-amavis" $PANEL_PATH/configs/postfix/master.cf ; then
-			echo "smtp-amavis      unix    -       -       -       -       2       smtp" >> $PANEL_PATH/configs/postfix/master.cf
-			echo "        -o smtp_data_done_timeout=1200" >> $PANEL_PATH/configs/postfix/master.cf
-			echo "        -o smtp_send_xforward_command=yes" >> $PANEL_PATH/configs/postfix/master.cf
-			echo "        -o disable_dns_lookups=yes" >> $PANEL_PATH/configs/postfix/master.cf
-			echo "        -o max_use=20" >> $PANEL_PATH/configs/postfix/master.cf
-			echo "" >> $PANEL_PATH/configs/postfix/master.cf
-			echo "127.0.0.1:10025 inet    n       -       -       -       -       smtpd" >> $PANEL_PATH/configs/postfix/master.cf
-			echo "        -o content_filter=" >> $PANEL_PATH/configs/postfix/master.cf
-			echo "        -o local_recipient_maps=" >> $PANEL_PATH/configs/postfix/master.cf
-			echo "        -o relay_recipient_maps=" >> $PANEL_PATH/configs/postfix/master.cf
-			echo "        -o smtpd_restriction_classes=" >> $PANEL_PATH/configs/postfix/master.cf
-			echo "        -o smtpd_delay_reject=no" >> $PANEL_PATH/configs/postfix/master.cf
-			echo "        -o smtpd_client_restrictions=permit_mynetworks,reject" >> $PANEL_PATH/configs/postfix/master.cf
-			echo "        -o smtpd_helo_restrictions=" >> $PANEL_PATH/configs/postfix/master.cf
-			echo "        -o smtpd_sender_restrictions=" >> $PANEL_PATH/configs/postfix/master.cf
-			echo "        -o smtpd_recipient_restrictions=permit_mynetworks,reject" >> $PANEL_PATH/configs/postfix/master.cf
-			echo "        -o smtpd_data_restrictions=reject_unauth_pipelining" >> $PANEL_PATH/configs/postfix/master.cf
-			echo "        -o smtpd_end_of_data_restrictions=" >> $PANEL_PATH/configs/postfix/master.cf
-			echo "        -o mynetworks=127.0.0.0/8" >> $PANEL_PATH/configs/postfix/master.cf
-			echo "        -o smtpd_error_sleep_time=0" >> $PANEL_PATH/configs/postfix/master.cf
-			echo "        -o smtpd_soft_error_limit=1001" >> $PANEL_PATH/configs/postfix/master.cf
-			echo "        -o smtpd_hard_error_limit=1000" >> $PANEL_PATH/configs/postfix/master.cf
-			echo "        -o smtpd_client_connection_count_limit=0" >> $PANEL_PATH/configs/postfix/master.cf
-			echo "        -o smtpd_client_connection_rate_limit=0" >> $PANEL_PATH/configs/postfix/master.cf
-			echo "        -o receive_override_options=no_header_body_checks,no_unknown_recipient_checks" >> $PANEL_PATH/configs/postfix/master.cf
-			sed -i "s@pickup@pickup	  fifo	n	-	-	60	1	pickup\n\t-o content_filter=\n\t-o receive_override_options=no_header_body_checks\n#@" $PANEL_PATH/configs/postfix/master.cf
-			echo "content_filter = smtp-amavis:[127.0.0.1]:10024" >> $PANEL_PATH/configs/postfix/main.cf
+	if [[ "$INSTALL_MTA_CF" = "true" ]]; then
+		if [[ "$OS" = "Ubuntu" ]]; then
+			adduser amavis clamav
+			sed -i "s@1;@@" /etc/amavis/conf.d/15-content_filter_mode
+			echo "@bypass_virus_checks_maps = (" /etc/amavis/conf.d/15-content_filter_mode
+			echo " \%bypass_virus_checks, \@bypass_virus_checks_acl, \$bypass_virus_checks_re);" /etc/amavis/conf.d/15-content_filter_mode
+			echo "@bypass_spam_checks_maps = (" /etc/amavis/conf.d/15-content_filter_mode
+			echo " \%bypass_spam_checks, \@bypass_spam_checks_acl, \$bypass_spam_checks_re);" /etc/amavis/conf.d/15-content_filter_mode
+			echo "1;"
+			AMAVISC="/etc/amavis/conf.d/50-user"
+			echo "use strict;" > $AMAVISC
+			echo "@local_domains_acl = qw(.);" >> $AMAVISC
+			echo "\$log_level = 2;" >> $AMAVISC	# Change to 1 to reduce login details
+			echo "\$syslog_priority = 'debug';" >> $AMAVISC # Change to 'info' to reduce login details
+			echo "# \$sa_tag_level_deflt = 2.0; # add spam info headers if at, or above that level" >> $AMAVISC
+			echo "# \$sa_tag2_level_deflt = 6.31; # add 'spam detected' headers at that level" >> $AMAVISC
+			echo "\$sa_kill_level_deflt = 8.0; # triggers spam evasive actions" >> $AMAVISC
+			echo "# \$sa_dsn_cutoff_level = 10; # spam level beyond which a DSN is not sent" >> $AMAVISC
+			echo "# \$final_spam_destiny = D_PASS;" >> $AMAVISC
+			echo "# \$final_spam_destiny = D_REJECT; # default " >> $AMAVISC
+			echo "\$final_spam_destiny = D_BOUNCE; # debian default " >> $AMAVISC # Change to D_DISCARD when things were going well
+			echo "# \$final_spam_destiny = D_DISCARD; # ubuntu default, recommended as sender is usually faked" >> $AMAVISC
+			echo "1;" >> $AMAVISC
+			if ! grep -q "smtp-amavis" $PANEL_PATH/configs/postfix/master.cf ; then
+				echo "smtp-amavis      unix    -       -       -       -       2       smtp" >> $PANEL_PATH/configs/postfix/master.cf
+				echo "        -o smtp_data_done_timeout=1200" >> $PANEL_PATH/configs/postfix/master.cf
+				echo "        -o smtp_send_xforward_command=yes" >> $PANEL_PATH/configs/postfix/master.cf
+				echo "        -o disable_dns_lookups=yes" >> $PANEL_PATH/configs/postfix/master.cf
+				echo "        -o max_use=20" >> $PANEL_PATH/configs/postfix/master.cf
+				echo "" >> $PANEL_PATH/configs/postfix/master.cf
+				echo "127.0.0.1:10025 inet    n       -       -       -       -       smtpd" >> $PANEL_PATH/configs/postfix/master.cf
+				echo "        -o content_filter=" >> $PANEL_PATH/configs/postfix/master.cf
+				echo "        -o local_recipient_maps=" >> $PANEL_PATH/configs/postfix/master.cf
+				echo "        -o relay_recipient_maps=" >> $PANEL_PATH/configs/postfix/master.cf
+				echo "        -o smtpd_restriction_classes=" >> $PANEL_PATH/configs/postfix/master.cf
+				echo "        -o smtpd_delay_reject=no" >> $PANEL_PATH/configs/postfix/master.cf
+				echo "        -o smtpd_client_restrictions=permit_mynetworks,reject" >> $PANEL_PATH/configs/postfix/master.cf
+				echo "        -o smtpd_helo_restrictions=" >> $PANEL_PATH/configs/postfix/master.cf
+				echo "        -o smtpd_sender_restrictions=" >> $PANEL_PATH/configs/postfix/master.cf
+				echo "        -o smtpd_recipient_restrictions=permit_mynetworks,reject" >> $PANEL_PATH/configs/postfix/master.cf
+				echo "        -o smtpd_data_restrictions=reject_unauth_pipelining" >> $PANEL_PATH/configs/postfix/master.cf
+				echo "        -o smtpd_end_of_data_restrictions=" >> $PANEL_PATH/configs/postfix/master.cf
+				echo "        -o mynetworks=127.0.0.0/8" >> $PANEL_PATH/configs/postfix/master.cf
+				echo "        -o smtpd_error_sleep_time=0" >> $PANEL_PATH/configs/postfix/master.cf
+				echo "        -o smtpd_soft_error_limit=1001" >> $PANEL_PATH/configs/postfix/master.cf
+				echo "        -o smtpd_hard_error_limit=1000" >> $PANEL_PATH/configs/postfix/master.cf
+				echo "        -o smtpd_client_connection_count_limit=0" >> $PANEL_PATH/configs/postfix/master.cf
+				echo "        -o smtpd_client_connection_rate_limit=0" >> $PANEL_PATH/configs/postfix/master.cf
+				echo "        -o receive_override_options=no_header_body_checks,no_unknown_recipient_checks" >> $PANEL_PATH/configs/postfix/master.cf
+				sed -i "s@pickup@pickup	  fifo	n	-	-	60	1	pickup\n\t-o content_filter=\n\t-o receive_override_options=no_header_body_checks\n#@" $PANEL_PATH/configs/postfix/master.cf
+				echo "content_filter = smtp-amavis:[127.0.0.1]:10024" >> $PANEL_PATH/configs/postfix/main.cf
+			fi
+			change "-R" "775" amavis amavis /var/lib/amavis/tmp
+			# Order of restarting following services are relevant in some contexts
+			service postfix restart
+			service opendkim restart
+			service spamassassin restart
+			service clamav-daemon restart
+			service clamav-freshclam restart
+			/etc/init.d/amavis restart
 		fi
-		change "-R" "775" amavis amavis /var/lib/amavis/tmp
-		# Order of restarting following services are relevant in some contexts
-		service postfix restart
-		service opendkim restart
-		service spamassassin restart
-		service clamav-daemon restart
-		service clamav-freshclam restart
-		/etc/init.d/amavis restart
 	fi
 fi
 
@@ -1034,8 +1091,8 @@ else
 fi
 
 #====================================================================================
-#--- webalyzer
-echo -e "\n-- Webalyzer security"
+#--- webalizer
+echo -e "\n-- Webalizer security"
 if [[ "$REVERT" = "false" ]] ; then
 	if [[ "$OS" = "Ubuntu" ]]; then
 		true
@@ -1048,7 +1105,7 @@ fi
 
 #====================================================================================
 #--- Modsecurity must/should be (re)enabled with sentora environment?
-# To be revised and include in future versions
+# To be revised and may be included in future versions
 if [[ "$REVERT" = "false" ]] ; then
 	if [[ "$OS" = "Ubuntu" ]]; then
 	 true
@@ -1286,6 +1343,7 @@ fi
 echo -e "\n-- ipset security"
 if [[ "$REVERT" = "false" ]] ; then
 	if [[ "$OS" = "Ubuntu" ]]; then
+		#ipv4
 	 	ipset destroy BLACKLIST_IP -q
 		ipset create BLACKLIST_IP hash:ip hashsize 2048 -q
 		ipset flush BLACKLIST_IP
@@ -1294,6 +1352,13 @@ if [[ "$REVERT" = "false" ]] ; then
 		ipset flush BLACKLIST_NET
 		ipset add BLACKLIST_IP 176.31.61.1
 		ipset add BLACKLIST_NET 176.31.61.0/28
+		#ipv6
+	 	ipset destroy BLACKLIST_IP6 -q
+		ipset create BLACKLIST_IP6 hash:ip family inet6 hashsize 2048 -q
+		ipset flush BLACKLIST_IP6
+		ipset destroy BLACKLIST_NET6 -q
+		ipset create BLACKLIST_NET6 hash:net family inet6 hashsize 1024 -q
+		ipset flush BLACKLIST_NET6
 		echo "NOTICE: ipset blacklists are set, this may block legitimate IPs"
 	fi
 else
@@ -1425,55 +1490,67 @@ fi
 
 #====================================================================================
 #--- AppArmor
+# Add next two lines in documentation not here:
 # for use aparmor with vhosts see mod_apparmor at http://wiki.apparmor.net/index.php/Mod_apparmor_example
-# [TO-DO] modify default sentora vhost file writer to confine scripts (something like open_basedir and suhosin.executor.func.whitelist or blacklist)
+# more useful info http://dev.man-online.org/man8/mod_apparmor/
+
 echo -e "\n-- AppArmor security"
 if [[ "$REVERT" = "false" ]] ; then
-	if [[ "$OS" = "Ubuntu" ]]; then
-		# backup
-		if [ -d $SENTORA_PARANOID_BACKUP_PATH/apparmor.d ] ; then
-			echo "apparmor profiles already backed up"
-		else
-			mkdir -vp $SENTORA_PARANOID_BACKUP_PATH/apparmor.d
-			cp -vr /etc/apparmor.d/* $SENTORA_PARANOID_BACKUP_PATH/apparmor.d
-			# apache sentora config file backedup by apache
-			mkdir -vp $SENTORA_PARANOID_BACKUP_PATH/panel/modules/apache_admin/hooks
-			cp -vr $PANEL_PATH/panel/modules/apache_admin/hooks/OnDaemonRun.hook.php $SENTORA_PARANOID_BACKUP_PATH/panel/modules/apache_admin/hooks/OnDaemonRun.hook.php
+	if [[ "$INSTALL_ARMOR" = "true" ]]; then
+		if [[ "$OS" = "Ubuntu" ]]; then
+			# backup
+			if [ -d $SENTORA_PARANOID_BACKUP_PATH/apparmor.d ] ; then
+				echo "apparmor profiles already backed up"
+			else
+				mkdir -vp $SENTORA_PARANOID_BACKUP_PATH/apparmor.d
+				cp -vr /etc/apparmor.d/* $SENTORA_PARANOID_BACKUP_PATH/apparmor.d
+				# apache sentora config file backedup by apache
+				mkdir -vp $SENTORA_PARANOID_BACKUP_PATH/panel/modules/apache_admin/hooks
+				cp -vr $PANEL_PATH/panel/modules/apache_admin/hooks/OnDaemonRun.hook.php $SENTORA_PARANOID_BACKUP_PATH/panel/modules/apache_admin/hooks/OnDaemonRun.hook.php
+			fi
+			update-rc.d apparmor defaults
+			rm -v /etc/apparmor.d/disable/usr.sbin.apache2
+			cp -v $SENTORA_PARANOID_CONFIG_PATH/apparmor.d/etc.sentora.panel.bin.zsudo /etc/apparmor.d
+			echo "NOTICE: sentora zsudo is confined this may affect sentora functionality"
+			cp -v $SENTORA_PARANOID_CONFIG_PATH/apparmor.d/usr.bin.php /etc/apparmor.d
+			echo "NOTICE: PHP is confined this may affect web applications functionality"
+			cp -v $SENTORA_PARANOID_CONFIG_PATH/apparmor.d/usr.sbin.named /etc/apparmor.d
+			echo "NOTICE: bind is confined this may affect DNS functionality"
+			cp -v $SENTORA_PARANOID_CONFIG_PATH/apparmor.d/apache2.d/* /etc/apparmor.d/apache2.d
+			echo "NOTICE: apache is confined this may affect web server functionality"
+			change "-R" "g+w" root $ADMIN_GRP /etc/apparmor.d/apache2.d
+			echo "NOTICE: virtual hosts are confined this may affect virtualhost functionality"
+			aa-complain /etc/apparmor.d/*
+			sed -i "s@<Directory /etc/sentora/panel>@<Directory /etc/sentora/panel>\n\tAAHatName sentora@" $PANEL_PATH/configs/apache/httpd.conf
+			sed -i 's@"  AllowOverride All" . fs_filehandler::NewLine()@"  AllowOverride All" . fs_filehandler::NewLine() . "  AAHatName vhost" . fs_filehandler::NewLine()@g' $PANEL_PATH/panel/modules/apache_admin/hooks/OnDaemonRun.hook.php
+			a2enmod mpm_prefork
+			a2enmod apparmor
+			service apache2 restart
+			service apparmor start
 		fi
-		update-rc.d apparmor defaults
-		rm -v /etc/apparmor.d/disable/usr.sbin.apache2
-		cp -v $SENTORA_PARANOID_CONFIG_PATH/apparmor.d/etc.sentora.panel.bin.zsudo /etc/apparmor.d
-		cp -v $SENTORA_PARANOID_CONFIG_PATH/apparmor.d/usr.sbin.named /etc/apparmor.d
-		cp -v $SENTORA_PARANOID_CONFIG_PATH/apparmor.d/apache2.d/* /etc/apparmor.d/apache2.d
-		change "-R" "g+w" root $APACHE_GRP /etc/apparmor.d/apache2.d
-		aa-complain /etc/apparmor.d/*
-		sed -i "s@<Directory /etc/sentora/panel>@<Directory /etc/sentora/panel>\n\tAAHatName sentora@" $PANEL_PATH/configs/apache/httpd.conf
-		sed -i 's@"  AllowOverride All" . fs_filehandler::NewLine()@"  AllowOverride All" . fs_filehandler::NewLine() . "  AAHatName vhost" . fs_filehandler::NewLine()@g' $PANEL_PATH/panel/modules/apache_admin/hooks/OnDaemonRun.hook.php
-		a2enmod mpm_prefork
-		a2enmod apparmor
-		service apache2 restart
-		service apparmor start
 	fi
 else
-	if [[ "$OS" = "Ubuntu" ]]; then
-		# restore from backup
-		if [ $SENTORA_PARANOID_BACKUP_PATH/apparmor.d ] ; then
-			cp -vr $SENTORA_PARANOID_BACKUP_PATH/apparmor.d /etc/apparmor.d
-			# apache sentora config file restored by apache
-			cp -vr $SENTORA_PARANOID_BACKUP_PATH/panel/modules/apache_admin/hooks/OnDaemonRun.hook.php $PANEL_PATH/panel/modules/apache_admin/hooks/OnDaemonRun.hook.php
-			ln -svf /etc/apparmor.d/usr.sbin.apache2 /etc/apparmor.d/disable
-		else
-			echo "Original apparmor profiles unchanged"
+	if [ -d /etc/apparmor.d ] ; then
+		if [[ "$OS" = "Ubuntu" ]]; then
+			# restore from backup
+			if [ $SENTORA_PARANOID_BACKUP_PATH/apparmor.d ] ; then
+				cp -vr $SENTORA_PARANOID_BACKUP_PATH/apparmor.d /etc/apparmor.d
+				# apache sentora config file restored by apache
+				cp -vr $SENTORA_PARANOID_BACKUP_PATH/panel/modules/apache_admin/hooks/OnDaemonRun.hook.php $PANEL_PATH/panel/modules/apache_admin/hooks/OnDaemonRun.hook.php
+				ln -svf /etc/apparmor.d/usr.sbin.apache2 /etc/apparmor.d/disable
+			else
+				echo "Original apparmor profiles unchanged"
+			fi
+			# is safe to disable mod_prefork?
+			a2dismod apparmor
+			service apache2 restart
+			service apparmor stop
 		fi
-		# is safe to disable mod_prefork?
-		a2dismod apparmor
-		service apache2 restart
-		service apparmor stop
 	fi
 fi
 
 #====================================================================================
-#--- Restart firewall (ipset+iptables+faail2ban) and if revert remove sentora-paranoid preconf directory from site
+#--- Restart firewall (ipset+iptables+fail2ban) and if revert remove sentora-paranoid preconf directory from site
 if [[ "$REVERT" = "false" ]] ; then
 	if [ -f /etc/init.d/iptables-persistent ]; then
 		/etc/init.d/iptables-persistent restart
@@ -1509,9 +1586,13 @@ if [[ "$OS" = "Ubuntu" ]]; then
 	check_status
 fi
 
-CURRENT_DIR=$(pwd)
+CURRENT_DIR=$(pwd)		
 echo "#########################################################"
 if [[ "$REVERT" = "false" ]] ; then
+	if [ -f /root/passwords.txt ] ; then
+		echo "MySQL Paranoid Password : $PP" >> /root/passwords.txt
+		echo "OpenSSL CAroot Password : $SSL_PASS" >> /root/passwords.txt
+	fi
 	#--- Advise the admin that Sentora is now installed and accessible.
 	echo " Congratulations sentora-paranoid has now been installed "
 	echo " on your server. Please review the log file for any error"
@@ -1524,6 +1605,7 @@ if [[ "$REVERT" = "false" ]] ; then
 	fi
 	echo ""
 	echo " MySQL: paranoid user password is: $PP"
+	echo " OpenSSL: CAroot certificate password is: $SSL_PASS"
 	echo ""
 	echo " For relevant information about security changes please"
 	echo " take a look for the NOTICE messages in log file or using"

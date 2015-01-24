@@ -1,6 +1,6 @@
 # Author: Mario Rodriguez < sentora-paranoid (at) open-source.tk >
 
-^vhost {
+^vhost flags=(complain) {
   #include <abstractions/apache2-common>
 
   /proc/ r,

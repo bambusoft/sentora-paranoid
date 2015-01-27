@@ -1,11 +1,12 @@
 # Author: Mario Rodriguez < sentora-paranoid (at) open-source.tk >
 
 #include <tunables/global>
-/etc/sentora/panel/bin/zsudo flags=(complain) {
+/etc/sentora/panel/bin/zsudo{,null-*} flags=(complain) {
 	capability setuid,
 	
 	/etc/ld.so.cache mr,
 	/lib/i386-linux-gnu/** mr,
+	/etc/sentora/panel/bin/zsudo//null-* Cx,
 	
 	/etc/sentora/** rw,
 	/var/sentora/** rw,

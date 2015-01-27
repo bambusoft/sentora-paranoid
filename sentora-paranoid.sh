@@ -40,8 +40,8 @@ fi
 
 SENTORA_PARANOID_VERSION="1.0.0-dev-snapshot"	# This installer version
 SENTORA_INSTALLER_VERSION="1.0.0-RC2"	# Script version used to install sentora
-SENTORA_CORE_VERSION="1.0.0-RC1"		# Sentora core versión
-SENTORA_PRECONF_VERSION="1.0.0-RC1"		# Preconf used by sentora script installer
+SENTORA_CORE_VERSION="1.0.0-RC2"		# Sentora core versión
+SENTORA_PRECONF_VERSION="1.0.0-RC2"		# Preconf used by sentora script installer
 
 PANEL_PATH="/etc/sentora"
 PANEL_DATA="/var/sentora"
@@ -51,9 +51,12 @@ COLOR_GRN="\e[1;32m"
 COLOR_YLW="\e[1;33m"
 COLOR_END="\e[0m"
 
+# Default user options values, real values will be asked later
 STORE_TREE="false"
 INSTALL_MTA_CF="true"
 INSTALL_ARMOR="true"
+INSTALL_MODULE="false"
+DISABLE_PHP_FUNCS="false"
 
 change() {
 	# $1=[-R|blank] $2=permissions $3=usr $4=grp $5=[file|path]
@@ -122,6 +125,23 @@ passwordgen() {
     l=$1
     [ "$l" == "" ] && l=16
     tr -dc A-Za-z0-9 < /dev/urandom | head -c ${l} | xargs
+}
+
+ask_user_yn() {
+	# $1 msg, $2 default
+	RESULT=""
+	echo ""
+	while true; do
+		read -e -p "$1: (y/n)? " -i "$2" answer
+		case $answer in
+			[Yy]* ) RESULT="yes"
+					break
+					;;
+			[Nn]* ) RESULT="no"
+					break
+					;;
+		esac
+	done	
 }
 
 #====================================================================================
@@ -270,7 +290,7 @@ if [[ "$REVERT" = "false" ]] ; then
 	echo "	adminuser/admingroup (adminuser is in the sudoers list)"
 	echo "	root/root (more secure but risky at the same time)"
 	echo ''
-	echo "In doubt, please use the default values or root/root if you know what are you doing"
+	echo "In doubt, please use the default values or root/root if you know what you are doing"
 	echo ''
 	if [ -z "$SUDO_USER" ] ; then
 		ADMIN_USR="root"
@@ -302,19 +322,47 @@ if [[ "$REVERT" = "false" ]] ; then
 	echo -e "Using:$COLOR_GRN $ADMIN_USR : $ADMIN_GRP $COLOR_END as the administrative username:groupame"
 	echo "ADMIN_USR:$ADMIN_USR" > $datfile
 	echo "ADMIN_GRP:$ADMIN_GRP" >> $datfile
+	
+	# Ask for optional packages & configurations
+	#
+	# Disable PHP functions
+	ask_user_yn "Do you wish to disable system, exec and eval PHP functions" "n"
+	if [[ "$RESULT" = "yes" ]] ; then
+		DISABLE_PHP_FUNCS="true"
+	else
+		DISABLE_PHP_FUNCS="false"
+	fi	
+	# MTA packages
+	ask_user_yn "Do you wish to install MTA virus scanner and content filters" "y"
+	if [[ "$RESULT" = "yes" ]] ; then
+		INSTALL_MTA_CF="true"
+	else
+		INSTALL_MTA_CF="false"
+	fi
+	# Apparmor packages
+	ask_user_yn "Do you wish to install apparmor" "y"
+	if [[ "$RESULT" = "yes" ]] ; then
+		INSTALL_ARMOR="true"
+	else
+		INSTALL_ARMOR="false"
+	fi	
+	# Security modules
+	ask_user_yn "Do you wish to install security modules (experimental)" "n"
+	if [[ "$RESULT" = "yes" ]] ; then
+		INSTALL_MODULE="true"
+	else
+		INSTALL_MODULE="false"
+	fi	
+
 else
 	ADMIN_USR=$(grep "ADMIN_USR" $datfile | sed "s@ADMIN_USR:@@")
 	ADMIN_GRP=$(grep "ADMIN_GRP" $datfile | sed "s@ADMIN_GRP:@@")
 fi
 
-while true; do
-	echo ""
-	read -e -p "All is ok, do you want to $ACTION sentora-paranoid (Y/n)? " -i 'y' answer
-	case $answer in
-		[Yy]* ) break;;
-		[Nn]* ) exit;;
-	esac
-done
+ask_user_yn "All is ok, do you want to $ACTION sentora-paranoid" "y"
+if [[ "$RESULT" = "no" ]] ; then
+	exit
+fi
 clear
 
 #====================================================================================
@@ -371,6 +419,7 @@ fi
 echo -e "\n-- Working with sentora-paranoid preconf, Please wait, this may take several minutes, the installer will continue after this is complete!"
 SENTORA_PARANOID_CONFIG_PATH="$PANEL_PATH/configs/sentora-paranoid"
 SENTORA_PARANOID_BACKUP_PATH="$SENTORA_PARANOID_CONFIG_PATH/backup"
+SENTORA_PARANOID_MODULE_PATH="$SENTORA_PARANOID_CONFIG_PATH/modules"
 
 if [[ "$REVERT" = "false" ]] ; then
 	# Get latest sentora-paranoid/preconf
@@ -474,35 +523,6 @@ fi
 #====================================================================================
 #--- Install or remove used packages
 if [[ "$REVERT" = "false" ]] ; then
-	# Ask for install optional MTA packages
-	echo ""
-	while true; do
-		echo ""
-		read -e -p "Do you wish to install MTA virus scanner and content filters: (Y/n)? " -i 'y' answer
-		case $answer in
-			[Yy]* ) INSTALL_MTA_CF="true"
-					break
-					;;
-			[Nn]* ) INSTALL_MTA_CF="false"
-					break
-					;;
-		esac
-	done	
-	# Ask for install optional apparmor packages
-	echo ""
-	while true; do
-		echo ""
-		read -e -p "Do you wish to install apparmor: (Y/n)? " -i 'y' answer
-		case $answer in
-			[Yy]* ) INSTALL_ARMOR="true"
-					break
-					;;
-			[Nn]* ) INSTALL_ARMOR="false"
-					break
-					;;
-		esac
-	done	
-
 	if [[ "$OS" = "Ubuntu" ]]; then
 		echo -e "\n-- Downloading and installing required tools..."
 		$PACKAGE_INSTALLER openssl iptables iptables-persistent fail2ban ipset opendkim opendkim-tools
@@ -511,7 +531,7 @@ if [[ "$REVERT" = "false" ]] ; then
 			$PACKAGE_INSTALLER amavisd-new spamassassin spamc clamav clamav-base libclamav6 clamav-daemon clamav-freshclam pyzor razor
 			$PACKAGE_INSTALLER arj bzip2 cabextract cpio file gzip nomarch pax rar unrar unzip zip
 		fi
-		# Do not install apparmor-profiles unless you really know what are you doing
+		# Do not install apparmor-profiles unless you really know what you are doing
 		if [[ "$INSTALL_ARMOR" = "true" ]]; then
 			$PACKAGE_INSTALLER apparmor apparmor-utils libapache2-mod-apparmor
 		fi
@@ -519,7 +539,7 @@ if [[ "$REVERT" = "false" ]] ; then
 else
 	if [[ "$OS" = "Ubuntu" ]]; then
 		echo -e "\n-- Removing installed tools..."
-		$PACKAGE_REMOVER fail2ban libapache2-mod-apparmor opendkim opendkim-tools
+		$PACKAGE_REMOVER expect fail2ban libapache2-mod-apparmor opendkim opendkim-tools
 		if [[ "$INSTALL_MTA_CF" = "true" ]]; then
 			$PACKAGE_REMOVER amavisd-new spamassassin spamc clamav clamav-base libclamav6 clamav-daemon clamav-freshclam pyzor razor 
 		fi
@@ -541,11 +561,13 @@ RP=$(grep "pass" $PWDFILE | sed -e "s@\$pass = '@@" -e "s@';@@")
 PP=$(passwordgen);
 if [[ "$REVERT" = "false" ]] ; then
 	if [[ "$OS" = "Ubuntu" ]]; then
-		Q1="USE sentora_core;"
-		Q2="UPDATE x_settings SET so_value_tx='php_admin_value suhosin.executor.func.blacklist \"eval, passthru, show_source, shell_exec, system, pcntl_exec, popen, pclose, proc_open, proc_nice, proc_terminate, proc_get_status, proc_close, leak, apache_child_terminate, posix_kill, posix_mkfifo, posix_setpgid, posix_setsid, posix_setuid, escapeshellcmd, escapeshellarg, exec\"' WHERE so_name_vc='suhosin_value';"
-		SQL="${Q1}${Q2}"
-		$MYSQL -h localhost -u root "-p$RP" -e "$SQL"
-		echo "NOTICE: PHP Function [eval] was disabled, this may cause conflicts whit some php scripts"
+		if [[ "$DISABLE_PHP_FUNCS" = "true" ]] ; then
+			Q1="USE sentora_core;"
+			Q2="UPDATE x_settings SET so_value_tx='php_admin_value suhosin.executor.func.blacklist \"eval, passthru, show_source, shell_exec, system, pcntl_exec, popen, pclose, proc_open, proc_nice, proc_terminate, proc_get_status, proc_close, leak, apache_child_terminate, posix_kill, posix_mkfifo, posix_setpgid, posix_setsid, posix_setuid, escapeshellcmd, escapeshellarg, exec\"' WHERE so_name_vc='suhosin_value';"
+			SQL="${Q1}${Q2}"
+			$MYSQL -h localhost -u root "-p$RP" -e "$SQL"
+			echo "NOTICE: PHP Function [eval] was disabled, this may cause conflicts whit some php scripts"
+		fi
 		Q1="USE sentora_postfix;"
 		Q2="ALTER TABLE mailbox ADD COLUMN msgquota int(10) unsigned NOT NULL DEFAULT '0';"
 		Q3="ALTER TABLE mailbox ADD COLUMN msgtally int(10) unsigned NOT NULL DEFAULT '0';"
@@ -630,7 +652,7 @@ else
 	change "-R" "777" root root $PANEL_PATH
 	change "" "ug+s" root root $PANEL_PATH/panel/bin/zsudo
 	# PANEL DATA
-	change "-R" "777" www-data www-data $PANEL_DATA
+	change "-R" "777" $HTTP_USER $HTTP_GROUP $PANEL_DATA
 fi
 
 #====================================================================================
@@ -646,11 +668,32 @@ if [[ "$REVERT" = "false" ]] ; then
 			mkdir -vp $SENTORA_PARANOID_BACKUP_PATH/mysql
 			cp -v /etc/mysql/my.cnf $SENTORA_PARANOID_BACKUP_PATH/mysql
 		fi
+		#bind-address is set to 127.0.0.1 by default, we ensure access from localhost only and disable load of local files for local mysql accounts
+		sed -i "s@bind-address@bind-address = 127.0.0.1\nlocal-infile=0\n#@" /etc/mysql/my.cnf
+		echo "NOTICE: mysql can be accessed from 127.0.0.1 only"
+		# (Put this ind documentation, not here)
+		#if you really need to acces mysql from outside, please consider a SSH tunnel
+		#to get into loclahost with another port and forward that port to mysql 3306
+		#
+		# Secure mysql from inside
+		Q1="DELETE FROM mysql.user WHERE User='';"
+		Q2="DELETE FROM mysql.user WHERE User='root' AND Host NOT IN ('localhost', '127.0.0.1', '::1');"
+		SQL="${Q1}${Q2}"
+		$MYSQL -h localhost -u root "-p$RP" -e "$SQL"
+		Q1="DROP DATABASE test;"
+		Q2="DELETE FROM mysql.db WHERE Db='test' OR Db='test\\_%';"
+		SQL="${Q1}${Q2}"
+		$MYSQL -h localhost -u root "-p$RP" -e "$SQL"
+		echo "sentora-paranoid: test database does not exist is a vlid ERROR here"
+		Q1="FLUSH PRIVILEGES;"
+		SQL="${Q1}"
+		$MYSQL -h localhost -u root "-p$RP" -e "$SQL"
 		# Allow authentication warnings
 		sed -i "s@log_error =.*@log_error = /var/log/mysql/error.log\nlog-warnings = 2@" /etc/mysql/my.cnf
 		# File permissions		
 		change "" "600" root root /etc/mysql/debian.cnf
 		change "" "g+w" root $ADMIN_GRP /etc/mysql/my.cnf
+		service mysql restart
 	fi
 else
 	if [[ "$OS" = "Ubuntu" ]]; then
@@ -916,6 +959,14 @@ if [[ "$REVERT" = "false" ]] ; then
 				sed -i "s@pickup@pickup	  fifo	n	-	-	60	1	pickup\n\t-o content_filter=\n\t-o receive_override_options=no_header_body_checks\n#@" $PANEL_PATH/configs/postfix/master.cf
 				echo "content_filter = smtp-amavis:[127.0.0.1]:10024" >> $PANEL_PATH/configs/postfix/main.cf
 			fi
+			if ! grep -q ">amavisd<" $PANEL_PATH/panel/modules/services/code/controller.ext.php ; then
+				sed -i "s@$line .= '</table>';@$line .= '<tr><th>amavisd</th><td>'   . module_controller::status_port(10024, $iconpath) . '</td></tr>';\n\t$line .= '</table>';@" $PANEL_PATH/panel/modules/services/code/controller.ext.php
+				sed -i "s@$line .= '</table>';@$line .= '<tr><th>amavisr</th><td>'   . module_controller::status_port(10025, $iconpath) . '</td></tr>';\n\t$line .= '</table>';@" $PANEL_PATH/panel/modules/services/code/controller.ext.php
+				sed -i "s@static function getIsSMTPUp()@static function getIsAMAVISDUp() { return sys_monitoring::PortStatus(10024); }\n\tstatic function getIsSMTPUp()@" $PANEL_PATH/panel/modules/services/code/controller.ext.php
+				sed -i "s@static function getIsSMTPUp()@static function getIsAMAVISRUp() { return sys_monitoring::PortStatus(10025); }\n\tstatic function getIsSMTPUp()@" $PANEL_PATH/panel/modules/services/code/controller.ext.php
+				sed -i "s@'smtp' => (module_controller::getIsSMTPUp() == '' ? 0 : 1),@'amavisd' => (module_controller::getIsAMAVISDUp() == '' ? 0 : 1),\n\t'smtp' => (module_controller::getIsSMTPUp() == '' ? 0 : 1),@" $PANEL_PATH/panel/modules/services/code/webservice.ext.php
+				sed -i "s@'smtp' => (module_controller::getIsSMTPUp() == '' ? 0 : 1),@'amavisr' => (module_controller::getIsAMAVISRUp() == '' ? 0 : 1),\n\t'smtp' => (module_controller::getIsSMTPUp() == '' ? 0 : 1),@" $PANEL_PATH/panel/modules/services/code/webservice.ext.php
+			fi
 			change "-R" "775" amavis amavis /var/lib/amavis/tmp
 			# Order of restarting following services are relevant in some contexts
 			service postfix restart
@@ -987,12 +1038,13 @@ if [[ "$REVERT" = "false" ]] ; then
 		
 		# Now adjust php configurations in both apache2/php.ini and cli/php.ini
 		# (many of them has correct values by default, but we aro not going to make any assumptions)
-
-		# Disable insecure functions 
-		sed -i "s@disable_functions =.*@disable_functions = system,exec,eval,pcntl_alarm,pcntl_fork,pcntl_waitpid,pcntl_wait,pcntl_wifexited,pcntl_wifstopped,pcntl_wifsignaled,pcntl_wexitstatus,pcntl_wtermsig,pcntl_wstopsig,pcntl_signal,pcntl_signal_dispatch,pcntl_get_last_error,pcntl_strerror,pcntl_sigprocmask,pcntl_sigwaitinfo,pcntl_sigtimedwait,pcntl_exec,pcntl_getpriority,pcntl_setpriority@" /etc/php5/apache2/php.ini
-		sed -i "s@disable_functions =.*@disable_functions = exec,eval,pcntl_alarm,pcntl_fork,pcntl_waitpid,pcntl_wait,pcntl_wifexited,pcntl_wifstopped,pcntl_wifsignaled,pcntl_wexitstatus,pcntl_wtermsig,pcntl_wstopsig,pcntl_signal,pcntl_signal_dispatch,pcntl_get_last_error,pcntl_strerror,pcntl_sigprocmask,pcntl_sigwaitinfo,pcntl_sigtimedwait,pcntl_exec,pcntl_getpriority,pcntl_setpriority@" /etc/php5/cli/php.ini
-		echo "NOTICE: Web Functions [system, exec and eval] are disabled, this may cause conflicts whit some web php scripts"
-		echo "NOTICE: Client Functions [exec and eval] are disabled, this may cause conflicts whit some local php scripts"
+		if [[ "$DISABLE_PHP_FUNCS" = "true" ]] ; then
+			# Disable insecure functions
+			sed -i "s@disable_functions =.*@disable_functions = system,exec,eval,pcntl_alarm,pcntl_fork,pcntl_waitpid,pcntl_wait,pcntl_wifexited,pcntl_wifstopped,pcntl_wifsignaled,pcntl_wexitstatus,pcntl_wtermsig,pcntl_wstopsig,pcntl_signal,pcntl_signal_dispatch,pcntl_get_last_error,pcntl_strerror,pcntl_sigprocmask,pcntl_sigwaitinfo,pcntl_sigtimedwait,pcntl_exec,pcntl_getpriority,pcntl_setpriority@" /etc/php5/apache2/php.ini
+			sed -i "s@disable_functions =.*@disable_functions = eval,pcntl_alarm,pcntl_fork,pcntl_waitpid,pcntl_wait,pcntl_wifexited,pcntl_wifstopped,pcntl_wifsignaled,pcntl_wexitstatus,pcntl_wtermsig,pcntl_wstopsig,pcntl_signal,pcntl_signal_dispatch,pcntl_get_last_error,pcntl_strerror,pcntl_sigprocmask,pcntl_sigwaitinfo,pcntl_sigtimedwait,pcntl_exec,pcntl_getpriority,pcntl_setpriority@" /etc/php5/cli/php.ini
+			echo "NOTICE: Web Functions [system, exec and eval] are disabled, this may cause conflicts whit some web php scripts"
+			echo "NOTICE: Client Functions [eval] are disabled, this may cause conflicts whit some local php scripts"
+		fi
 		# Do not expose php installed (web only)
 		sed -i "s@expose_php = On@expose_php = Off@" /etc/php5/apache2/php.ini
 		# Reduce error reporting in production web server
@@ -1263,6 +1315,11 @@ if [[ "$REVERT" = "false" ]] ; then
 			echo "  </VirtualHost>" >> $PANEL_PATH/configs/proftpd/proftpd-mysql.conf
 			echo "</IfModule>" >> $PANEL_PATH/configs/proftpd/proftpd-mysql.conf
 		fi
+		if ! grep -q ">sFTP<" $PANEL_PATH/panel/modules/services/code/controller.ext.php ; then
+			sed -i "s@$line .= '</table>';@$line .= '<tr><th>sFTP</th><td>'   . module_controller::status_port(115, $iconpath) . '</td></tr>';\n\t$line .= '</table>';@" $PANEL_PATH/panel/modules/services/code/controller.ext.php
+			sed -i "s@static function getIsFTPUp()@static function getIsSFTPUp() { return sys_monitoring::PortStatus(115); }\n\tstatic function getIsFTPUp()@" $PANEL_PATH/panel/modules/services/code/controller.ext.php
+			sed -i "s@'ftp' => (module_controller::getIsFTPUp() == '' ? 0 : 1),@'ftp' => (module_controller::getIsFTPUp() == '' ? 0 : 1),\n\t'sftp' => (module_controller::getIsSFTPUp() == '' ? 0 : 1),@" $PANEL_PATH/panel/modules/services/code/webservice.ext.php			
+		fi
 		# File permissions
 		change "" "g+w" root $ADMIN_GRP $PANEL_PATH/configs/proftpd/proftpd-mysql.conf
 		change "-R" "g+w" root $ADMIN_GRP /etc/proftpd/conf.d
@@ -1335,6 +1392,31 @@ if [[ "$REVERT" = "false" ]] ; then
 else
 	if [[ "$OS" = "Ubuntu" ]]; then
 		true
+	fi
+fi
+
+#====================================================================================
+#--- sentora-paranoid security modules
+echo -e "\n-- sentora-paranoid security modules"
+if [[ "$REVERT" = "false" ]] ; then
+	if [[ "$INSTALL_ARMOR" = "true" ]]; then
+		if [[ "$OS" = "Ubuntu" ]]; then
+			mkdir -vp $PANEL_PATH/panel/modules/paranoid_admin
+			cp -vr $SENTORA_PARANOID_MODULE_PATH/paranoid_admin $PANEL_PATH/panel/modules/paranoid_admin
+			Q1="USE sentora_core;"
+			Q2="INSERT INTO x_modules (mo_category_fk, mo_name_vc, mo_version_in, mo_folder_vc, mo_type_en, mo_desc_tx, mo_installed_ts, mo_enabled_en, mo_updatever_vc, mo_updateurl_tx) VALUES (0, 'Paranoid Config', 150125, 'paranoid_admin', 'modadmin', 'This module enables you to configure security settings for the server environment', NULL, 'true', '', '');"
+			SQL="${Q1}${Q2}"
+			$MYSQL -h localhost -u root "-p$RP" -e "$SQL"
+			echo "NOTICE: Experimental module sentora-paranoid was installed"
+		fi
+	fi
+else
+	if [[ "$OS" = "Ubuntu" ]]; then
+			Q1="USE sentora_core;"
+			Q2="DELETE FROM x_modules WHERE mo_name_vc='Paranoid Config';"
+			SQL="${Q1}${Q2}"
+			$MYSQL -h localhost -u root "-p$RP" -e "$SQL"
+			rm -rf $SENTORA_PARANOID_MODULE_PATH $PANEL_PATH/panel/modules/paranoid_admin
 	fi
 fi
 
@@ -1491,6 +1573,8 @@ fi
 #====================================================================================
 #--- AppArmor
 # Add next two lines in documentation not here:
+# docs: http://wiki.apparmor.net/index.php/Documentation , http://wiki.apparmor.net/index.php/AppArmor_Core_Policy_Reference
+#		http://www.novell.com/documentation/apparmor/apparmor201_sp10_admin/data/book_apparmor_admin.html
 # for use aparmor with vhosts see mod_apparmor at http://wiki.apparmor.net/index.php/Mod_apparmor_example
 # more useful info http://dev.man-online.org/man8/mod_apparmor/
 
@@ -1521,6 +1605,7 @@ if [[ "$REVERT" = "false" ]] ; then
 			change "-R" "g+w" root $ADMIN_GRP /etc/apparmor.d/apache2.d
 			echo "NOTICE: virtual hosts are confined this may affect virtualhost functionality"
 			aa-complain /etc/apparmor.d/*
+			echo "sentora-paranoid: why is this Multiple definitions exception ocurring here?"
 			sed -i "s@<Directory /etc/sentora/panel>@<Directory /etc/sentora/panel>\n\tAAHatName sentora@" $PANEL_PATH/configs/apache/httpd.conf
 			sed -i 's@"  AllowOverride All" . fs_filehandler::NewLine()@"  AllowOverride All" . fs_filehandler::NewLine() . "  AAHatName vhost" . fs_filehandler::NewLine()@g' $PANEL_PATH/panel/modules/apache_admin/hooks/OnDaemonRun.hook.php
 			a2enmod mpm_prefork
@@ -1586,7 +1671,8 @@ if [[ "$OS" = "Ubuntu" ]]; then
 	check_status
 fi
 
-CURRENT_DIR=$(pwd)		
+CURRENT_DIR=$(pwd)	
+echo ""	
 echo "#########################################################"
 if [[ "$REVERT" = "false" ]] ; then
 	if [ -f /root/passwords.txt ] ; then
@@ -1634,5 +1720,8 @@ if [[ "$OS" = "Ubuntu" ]]; then
     shutdown -r now
 fi
 
-# [TO DO] Review http://www.cyberciti.biz/tips/linux-security.html
-#				http://security-24-7.com/hardening-guide-for-postfix-2-x/
+# [TO DO] Review
+# http://blog.mattbrock.co.uk/hardening-the-security-on-ubuntu-server-14-04/
+# http://konstruktoid.net/2014/04/29/hardening-the-ubuntu-14-04-server-even-further/
+# http://www.cyberciti.biz/tips/linux-security.html
+# http://security-24-7.com/hardening-guide-for-postfix-2-x/

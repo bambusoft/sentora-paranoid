@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<module>
+    <name>Paranoid Admin</name>
+    <version>150125</version>
+    <defaultcat>Admin</defaultcat>
+    <desc>This module enables you to configure server security settings</desc>
+    <authorname>sentora-paranoid</authorname>
+    <authoremail>sentora-paranoid@open-source.tk</authoremail>
+    <authorurl>http://sentora-paranoid.open-source.tk</authorurl>
+    <updateurl>http://store.sentora.org/version.xml</updateurl>
+</module>

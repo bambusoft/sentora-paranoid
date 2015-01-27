@@ -6,6 +6,7 @@
 	/etc/php5/** r,
 	/etc/alternatives/** r,
 	/etc/apache2/** r,
+	/proc/** r,
 	/usr/bin/** r,
 	/usr/include/php5/** r,
 	/usr/lib/** r,

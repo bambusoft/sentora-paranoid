@@ -39,9 +39,9 @@ if [[ "$1" = "clean" ]] ; then
 fi
 
 SENTORA_PARANOID_VERSION="1.0.0-dev-snapshot"	# This installer version
-SENTORA_INSTALLER_VERSION="1.0.0-RC2"	# Script version used to install sentora
-SENTORA_CORE_VERSION="1.0.0-RC2"		# Sentora core versión
-SENTORA_PRECONF_VERSION="1.0.0-RC2"		# Preconf used by sentora script installer
+SENTORA_INSTALLER_VERSION="1.0.0"	# Script version used to install sentora
+SENTORA_CORE_VERSION="1.0.0"		# Sentora core versión
+SENTORA_PRECONF_VERSION="1.0.0"		# Preconf used by sentora script installer
 
 PANEL_PATH="/etc/sentora"
 PANEL_DATA="/var/sentora"
@@ -130,7 +130,6 @@ passwordgen() {
 ask_user_yn() {
 	# $1 msg, $2 default
 	RESULT=""
-	echo ""
 	while true; do
 		read -e -p "$1: (y/n)? " -i "$2" answer
 		case $answer in
@@ -463,8 +462,8 @@ if ! [[ $SSHD_PORT =~ $re ]] ; then
 fi
 echo "SSHD Port: $SSHD_PORT"
 if [[ "$REVERT" = "false" ]] ; then
-	sed "s@%%SSHDPORT%%@$SSHD_PORT@g" $SENTORA_PARANOID_CONFIG_PATH/iptables/iptables.firewall.orig > $SENTORA_PARANOID_CONFIG_PATH/iptables/iptables.firewall.rules 
-	sed "s@%%SSHDPORT%%@$SSHD_PORT@g" $SENTORA_PARANOID_CONFIG_PATH/iptables/ip6tables.firewall.orig > $SENTORA_PARANOID_CONFIG_PATH/iptables/ip6tables.firewall.rules 
+	sed "s@%%SSHDPORT%%@$SSHD_PORT@" $SENTORA_PARANOID_CONFIG_PATH/iptables/iptables.firewall.orig > $SENTORA_PARANOID_CONFIG_PATH/iptables/iptables.firewall.rules 
+	sed "s@%%SSHDPORT%%@$SSHD_PORT@" $SENTORA_PARANOID_CONFIG_PATH/iptables/ip6tables.firewall.orig > $SENTORA_PARANOID_CONFIG_PATH/iptables/ip6tables.firewall.rules 
 	sed "s@%%SSHDPORT%%@$SSHD_PORT@g" $SENTORA_PARANOID_CONFIG_PATH/fail2ban/jail.local.orig > $SENTORA_PARANOID_CONFIG_PATH/fail2ban/jail.local
 fi
 
@@ -574,7 +573,7 @@ if [[ "$REVERT" = "false" ]] ; then
 		Q4="ALTER TABLE mailbox ADD COLUMN timestamp int(10) unsigned DEFAULT NULL;"
 		SQL="${Q1}${Q2}${Q3}${Q4}"
 		$MYSQL -h localhost -u root "-p$RP" -e "$SQL"
-		echo "NOTICE: sentora_postfix database has changed to manage mail quota"
+		echo "NOTICE: sentora_postfix database has been changed to manage mail quota"
 		Q1="CREATE USER 'paranoid'@'localhost' IDENTIFIED BY '${PP}';"
 		Q2="GRANT ALL PRIVILEGES ON sentora_postfix . * TO 'paranoid'@'localhost';"
 		Q3="FLUSH PRIVILEGES;"
@@ -637,10 +636,22 @@ if [[ "$REVERT" = "false" ]] ; then
 	change "-R" "775" $ADMIN_USR $HTTP_GROUP $PANEL_PATH/panel/modules/webalizer_stats/stats
 	echo "NOTICE: $PANEL_PATH file permissions changed, this will affect core and module updates"
 	# PANEL DATA
-	change "-R" "775" $HTTP_USER $HTTP_GROUP $PANEL_DATA
-	change "" "775" vmail mail $PANEL_DATA/sieve
-	change "" "775" vmail mail $PANEL_DATA/vmail
+	change "" "664" root $ADMIN_GRP $PANEL_DATA/sieve/globalfilter.sieve
 	echo "NOTICE: $PANEL_DATA file permissions changed, this will affect users directories"
+	find $PANEL_DATA/{backups,hostdata,logs,sessions,temp} -type f -exec chmod 664 {} +
+	change "" "775" root $HTTP_GROUP $PANEL_DATA/backups
+	change "-R" "770" $ADMIN_USR $HTTP_GROUP $PANEL_DATA/hostdata
+	change "" "777" root $HTTP_GROUP $PANEL_DATA/logs
+	change "" "733" $HTTP_USER $HTTP_GROUP $PANEL_DATA/sessions
+	change "" "775" vmail mail $PANEL_DATA/sieve
+	change "" "777" $HTTP_USER $HTTP_GROUP $PANEL_DATA/temp
+	chmod o+t $PANEL_DATA/{sessions,temp}
+	change "" "755" bind root $PANEL_DATA/logs/bind
+	chmod 660 $PANEL_DATA/logs/bind/*
+	mkdir -vp $PANEL_DATA/logs/domains
+	change "" "775" root $HTTP_GROUP $PANEL_DATA/logs/domains
+	change "" "775" root root $PANEL_DATA/logs/proftpd
+	change "" "770" vmail mail $PANEL_DATA/vmail
 else
 	if [[ "$OS" = "Ubuntu" ]]; then
 		Q2="UPDATE x_settings SET so_value_tx='php_admin_value suhosin.executor.func.blacklist \"passthru, show_source, shell_exec, system, pcntl_exec, popen, pclose, proc_open, proc_nice, proc_terminate, proc_get_status, proc_close, leak, apache_child_terminate, posix_kill, posix_mkfifo, posix_setpgid, posix_setsid, posix_setuid, escapeshellcmd, escapeshellarg, exec\"' WHERE so_name_vc='suhosin_value';"
@@ -683,8 +694,7 @@ if [[ "$REVERT" = "false" ]] ; then
 		Q1="DROP DATABASE test;"
 		Q2="DELETE FROM mysql.db WHERE Db='test' OR Db='test\\_%';"
 		SQL="${Q1}${Q2}"
-		$MYSQL -h localhost -u root "-p$RP" -e "$SQL"
-		echo "sentora-paranoid: test database does not exist is a vlid ERROR here"
+		#$MYSQL -h localhost -u root "-p$RP" -e "$SQL"
 		Q1="FLUSH PRIVILEGES;"
 		SQL="${Q1}"
 		$MYSQL -h localhost -u root "-p$RP" -e "$SQL"
@@ -717,7 +727,7 @@ if [[ "$REVERT" = "false" ]] ; then
 		echo "Creating new CA please enter a new rootCA password and requested data"
 		openssl genrsa -des3 -passout pass:$SSL_PASS -out $SENTORA_PARANOID_CONFIG_PATH/openssl/keys/root-ca.key 2048 -config $SENTORA_PARANOID_CONFIG_PATH/openssl/openssl.cnf
 		echo "Generating root-ca certificate please provide previously rootCA password"
-		openssl req -new -x509 -passin pass:$SSL_PASS -days 365 -subj "/C=MX/ST=Jalisco/L=Guadalajara/O=Sentora Paranoid Ltd/OU=Sentora Paranoid Certification Authority/CN=sentora-paranoid/emailAddress=root@${FQDN}" -key $SENTORA_PARANOID_CONFIG_PATH/openssl/keys/root-ca.key -out $SENTORA_PARANOID_CONFIG_PATH/openssl/certs/root-ca.crt -config $SENTORA_PARANOID_CONFIG_PATH/openssl/openssl.cnf
+		openssl req -new -x509 -passin pass:$SSL_PASS -days 365 -subj "/C=MX/ST=Jalisco/L=Guadalajara/O=Sentora Paranoid Ltd/OU=sentora-paranoid.open-source.tk/CN=sentora-paranoid/emailAddress=root@${FQDN}" -key $SENTORA_PARANOID_CONFIG_PATH/openssl/keys/root-ca.key -out $SENTORA_PARANOID_CONFIG_PATH/openssl/certs/root-ca.crt -config $SENTORA_PARANOID_CONFIG_PATH/openssl/openssl.cnf
 		echo "Generating root-ca PEM files please provide previously rootCA password"
 		openssl x509 -inform PEM -in $SENTORA_PARANOID_CONFIG_PATH/openssl/certs/root-ca.crt > $SENTORA_PARANOID_CONFIG_PATH/openssl/certs/root-ca.pem
 		openssl rsa -passin pass:$SSL_PASS -in $SENTORA_PARANOID_CONFIG_PATH/openssl/keys/root-ca.key -text > $SENTORA_PARANOID_CONFIG_PATH/openssl/keys/root-ca.pem
@@ -727,9 +737,12 @@ if [[ "$REVERT" = "false" ]] ; then
 		printf 'y\ny\n' | openssl ca -passin pass:$SSL_PASS -config $SENTORA_PARANOID_CONFIG_PATH/openssl/openssl.cnf -days 365 -out $SENTORA_PARANOID_CONFIG_PATH/openssl/certs/${FQDN}.crt -infiles $SENTORA_PARANOID_CONFIG_PATH/openssl/requests/${FQDN}.req
 		echo "Supressing $FQDN certificate password for apache"
 		openssl rsa -in $SENTORA_PARANOID_CONFIG_PATH/openssl/keys/${FQDN}.key -out $SENTORA_PARANOID_CONFIG_PATH/openssl/keys/${FQDN}-nophrase.key
-		find $SENTORA_PARANOID_CONFIG_PATH/openssl -type d -exec chmod 700 {} +
-		find $SENTORA_PARANOID_CONFIG_PATH/openssl -type f -exec chmod 600 {} +
+		change "-R" "g+rw" root $ADMIN_GRP $SENTORA_PARANOID_CONFIG_PATH/openssl
+		find $SENTORA_PARANOID_CONFIG_PATH/openssl -type d -exec chmod 750 {} +
+		find $SENTORA_PARANOID_CONFIG_PATH/openssl -type f -exec chmod 640 {} +
 		echo "NOTICE: Dummy certificates for CA and server was created, you need to provide self signed certificates or use a valid certificates"
+		#change "-R" "o+r" root $ADMIN_GRP $SENTORA_PARANOID_CONFIG_PATH/openssl/certs
+		#chmod o+x $SENTORA_PARANOID_CONFIG_PATH/openssl/certs
 	fi
 fi
 
@@ -760,7 +773,7 @@ if [[ "$REVERT" = "false" ]] ; then
 			sed -i "s@mailbox_size_limit@mailbox_size_limit = 104857600 #@" $PANEL_PATH/configs/postfix/main.cf
 			echo "maximal_queue_lifetime = 2d" >> $PANEL_PATH/configs/postfix/main.cf
 			echo "bounce_queue_lifetime = 4h" >> $PANEL_PATH/configs/postfix/main.cf
-			echo "NOTICE: postfix mailbox and mesage limits are set, this may cause conflicts with users expected behaviour"
+			echo "NOTICE: postfix mailbox and message limits are set, this may cause conflicts with users expected behaviour"
 			# Limit spammers
 			echo "smtpd_error_sleep_time = 20" >> $PANEL_PATH/configs/postfix/main.cf
 			echo "smtpd_soft_error_limit = 3" >> $PANEL_PATH/configs/postfix/main.cf
@@ -791,9 +804,9 @@ if [[ "$REVERT" = "false" ]] ; then
 		# sentora paranoid policy daemon script
 		sed -i "s@smtpd_data_restrictions = reject_unauth_pipelining@smtpd_data_restrictions = reject_unauth_pipelining, check_policy_service inet:127.0.0.1:24@" $PANEL_PATH/configs/postfix/main.cf
 		cp -v $SENTORA_PARANOID_CONFIG_PATH/postfix/sp-policyd.pl $SENTORA_PARANOID_CONFIG_PATH/postfix/sp-policyd.pl.orig
-		sed -i "s@%%LOCAL_IP%%@$local_ip@g" $SENTORA_PARANOID_CONFIG_PATH/postfix/sp-policyd.pl
-		sed -i "s@%%DBUSER%%@paranoid@g" $SENTORA_PARANOID_CONFIG_PATH/postfix/sp-policyd.pl
-		sed -i "s@%%DBPASS%%@$PP@g" $SENTORA_PARANOID_CONFIG_PATH/postfix/sp-policyd.pl
+		sed -i "s@%%LOCAL_IP%%@$local_ip@" $SENTORA_PARANOID_CONFIG_PATH/postfix/sp-policyd.pl
+		sed -i "s@%%DBUSER%%@paranoid@" $SENTORA_PARANOID_CONFIG_PATH/postfix/sp-policyd.pl
+		sed -i "s@%%DBPASS%%@$PP@" $SENTORA_PARANOID_CONFIG_PATH/postfix/sp-policyd.pl
 		cp -v $SENTORA_PARANOID_CONFIG_PATH/postfix/sp-policyd.pl /usr/sbin/sp-policyd.pl
 		change "" "ug+x" root $ADMIN_GRP /usr/sbin/sp-policyd.pl
 		cp -v $SENTORA_PARANOID_CONFIG_PATH/postfix/sp-policyd /etc/init.d/sp-policyd
@@ -801,7 +814,7 @@ if [[ "$REVERT" = "false" ]] ; then
 		update-rc.d sp-policyd defaults
 		touch $PANEL_DATA/logs/sp-policyd.log
 		# File permissions
-		change "" "g+w" root $ADMIN_GRP $PANEL_DATA/logs/sp-policyd.log
+		change "" "740" root $ADMIN_GRP $PANEL_DATA/logs/sp-policyd.log
 		change "-R" "g+w" root $ADMIN_GRP $PANEL_PATH/configs/postfix
 		change "" "g-w" root root $PANEL_PATH/configs/postfix
 		service postfix restart
@@ -960,8 +973,8 @@ if [[ "$REVERT" = "false" ]] ; then
 				echo "content_filter = smtp-amavis:[127.0.0.1]:10024" >> $PANEL_PATH/configs/postfix/main.cf
 			fi
 			if ! grep -q ">amavisd<" $PANEL_PATH/panel/modules/services/code/controller.ext.php ; then
-				sed -i "s@$line .= '</table>';@$line .= '<tr><th>amavisd</th><td>'   . module_controller::status_port(10024, $iconpath) . '</td></tr>';\n\t$line .= '</table>';@" $PANEL_PATH/panel/modules/services/code/controller.ext.php
-				sed -i "s@$line .= '</table>';@$line .= '<tr><th>amavisr</th><td>'   . module_controller::status_port(10025, $iconpath) . '</td></tr>';\n\t$line .= '</table>';@" $PANEL_PATH/panel/modules/services/code/controller.ext.php
+				sed -i "s@\$line .= '</table>';@\$line .= '<tr><th>amavisd</th><td>'   . module_controller::status_port(10024, \$iconpath) . '</td></tr>';\n\t\$line .= '</table>';@" $PANEL_PATH/panel/modules/services/code/controller.ext.php
+				sed -i "s@\$line .= '</table>';@\$line .= '<tr><th>amavisr</th><td>'   . module_controller::status_port(10025, \$iconpath) . '</td></tr>';\n\t\$line .= '</table>';@" $PANEL_PATH/panel/modules/services/code/controller.ext.php
 				sed -i "s@static function getIsSMTPUp()@static function getIsAMAVISDUp() { return sys_monitoring::PortStatus(10024); }\n\tstatic function getIsSMTPUp()@" $PANEL_PATH/panel/modules/services/code/controller.ext.php
 				sed -i "s@static function getIsSMTPUp()@static function getIsAMAVISRUp() { return sys_monitoring::PortStatus(10025); }\n\tstatic function getIsSMTPUp()@" $PANEL_PATH/panel/modules/services/code/controller.ext.php
 				sed -i "s@'smtp' => (module_controller::getIsSMTPUp() == '' ? 0 : 1),@'amavisd' => (module_controller::getIsAMAVISDUp() == '' ? 0 : 1),\n\t'smtp' => (module_controller::getIsSMTPUp() == '' ? 0 : 1),@" $PANEL_PATH/panel/modules/services/code/webservice.ext.php
@@ -1127,9 +1140,12 @@ if [[ "$REVERT" = "false" ]] ; then
 		#sed -i "s@\['log_session'\] = false@\['log_session'\] = true@" $PANEL_PATH/configs/roundcube/main.inc.php
 		#sed -i "s@\['enable_installer'\] = true@\['enable_installer'\] = false@" $PANEL_PATH/configs/roundcube/main.inc.php
 		if ! grep -q "# sentora-paranoid" $PANEL_PATH/configs/roundcube/roundcube_config.inc.php ; then
-			echo "$config['log_session'] = false;" >> $PANEL_PATH/configs/roundcube/roundcube_config.inc.php
-			echo "$config['enable_installer'] = false;" >> $PANEL_PATH/configs/roundcube/roundcube_config.inc.php
+			echo "\$config['log_session'] = true;" >> $PANEL_PATH/configs/roundcube/roundcube_config.inc.php
+			echo "\$config['enable_installer'] = false;" >> $PANEL_PATH/configs/roundcube/roundcube_config.inc.php
 		fi
+		# File permissions
+		#change "" "664" root $ADMIN_GRP $PANEL_DATA/logs/roundcube/*
+		change "" "775" root $ADMIN_GRP $PANEL_DATA/logs/roundcube
 	fi
 else
 	if [[ "$OS" = "Ubuntu" ]]; then
@@ -1182,10 +1198,10 @@ if [[ "$REVERT" = "false" ]] ; then
 			cp -v /etc/apache2/conf-available/security.conf $SENTORA_PARANOID_BACKUP_PATH/apache2/conf-available
 		fi
 		# remove security config override in sentora/httpd.conf, the rigth place is security.conf
-		sed -i "s@ServerTokens Prod@#ServerTokens Prod@g" $PANEL_PATH/configs/apache/httpd.conf
+		sed -i "s@ServerTokens Prod@#ServerTokens Prod@" $PANEL_PATH/configs/apache/httpd.conf
 		# Add host(ing) signature
-		if ! grep -q "Header set X-Hosting" $PANEL_PATH/configs/apache/httpd.conf; then
-			echo "Header set X-Hosting \"$FQDN\"" >> $PANEL_PATH/configs/apache/httpd.conf
+		if ! grep -q "Header set X-Hosting" /etc/apache2/apache.conf; then
+			echo "Header set X-Hosting \"$FQDN\"" >> /etc/apache2/apache2.conf
 		fi
 		# The default error log file is ${APACHE_LOG_DIR}/error.log, is better to split vhost error log from apache2 errors,
 		# we can write failure rules related to vhosts only
@@ -1194,15 +1210,25 @@ if [[ "$REVERT" = "false" ]] ; then
 			touch /var/log/apache2/other_vhosts_error.log
 		fi
 		# change security config
-		sed -i "s@ServerTokens OS@ServerTokens Prod@g" /etc/apache2/conf-available/security.conf
-		sed -i "s@ServerSignature On@ServerSignature Off@g" /etc/apache2/conf-available/security.conf
-		sed -i "s@TraceEnable On@TraceEnable Off@g" /etc/apache2/conf-available/security.conf
+		sed -i "s@ServerTokens OS@ServerTokens Prod@" /etc/apache2/conf-available/security.conf
+		sed -i "s@ServerSignature On@ServerSignature Off@" /etc/apache2/conf-available/security.conf
+		sed -i "s@TraceEnable On@TraceEnable Off@" /etc/apache2/conf-available/security.conf
 		# ...not sure if removing ETag enhances security
 		#Header unset ETag
 		#FileETag None
 		
+		# Create sentora https config fail
+		sed -i "s/%%ADMIN%%/webmaster@$FQDN/" $SENTORA_PARANOID_CONFIG_PATH/apache2/https.conf
+		sed -i "s@%%FQDN%%@$FQDN@" $SENTORA_PARANOID_CONFIG_PATH/apache2/https.conf
+		sed -i "s@%%CERT%%@$SENTORA_PARANOID_CONFIG_PATH/openssl/certs/${FQDN}.crt@" $SENTORA_PARANOID_CONFIG_PATH/apache2/https.conf
+		sed -i "s@%%KEY%%@$SENTORA_PARANOID_CONFIG_PATH/openssl/keys/${FQDN}-nophrase.key@" $SENTORA_PARANOID_CONFIG_PATH/apache2/https.conf
+		sed -i "s@%%CAPEM%%@$SENTORA_PARANOID_CONFIG_PATH/openssl/certs/root-ca.pem@" $SENTORA_PARANOID_CONFIG_PATH/apache2/https.conf
+		cp -v $SENTORA_PARANOID_CONFIG_PATH/apache2/https.conf $PANEL_PATH/configs/apache
+		if ! grep -q "https.conf" /etc/apache2/apache2.conf ; then
+			echo "Include $PANEL_PATH/configs/apache/https.conf" >> /etc/apache2/apache2.conf
+		fi		
 		# File permissions
-		change "" "g+w" root $ADMIN_GRP /etc/apache2/apache2.conf
+		change "" "g+w" root $ADMIN_GRP /etc/apache2/apache2.conf $PANEL_PATH/configs/apache/httpd.conf
 		change "" "g+w" root $ADMIN_GRP /etc/apache2/ports.conf*
 		change "-R" "g+w" root $ADMIN_GRP /etc/apache2/conf-available
 		change "-R" "g+w" root $ADMIN_GRP /etc/apache2/conf-enabled
@@ -1316,7 +1342,7 @@ if [[ "$REVERT" = "false" ]] ; then
 			echo "</IfModule>" >> $PANEL_PATH/configs/proftpd/proftpd-mysql.conf
 		fi
 		if ! grep -q ">sFTP<" $PANEL_PATH/panel/modules/services/code/controller.ext.php ; then
-			sed -i "s@$line .= '</table>';@$line .= '<tr><th>sFTP</th><td>'   . module_controller::status_port(115, $iconpath) . '</td></tr>';\n\t$line .= '</table>';@" $PANEL_PATH/panel/modules/services/code/controller.ext.php
+			sed -i "s@\$line .= '</table>';@\$line .= '<tr><th>sFTP</th><td>'   . module_controller::status_port(115, \$iconpath) . '</td></tr>';\n\t\$line .= '</table>';@" $PANEL_PATH/panel/modules/services/code/controller.ext.php
 			sed -i "s@static function getIsFTPUp()@static function getIsSFTPUp() { return sys_monitoring::PortStatus(115); }\n\tstatic function getIsFTPUp()@" $PANEL_PATH/panel/modules/services/code/controller.ext.php
 			sed -i "s@'ftp' => (module_controller::getIsFTPUp() == '' ? 0 : 1),@'ftp' => (module_controller::getIsFTPUp() == '' ? 0 : 1),\n\t'sftp' => (module_controller::getIsSFTPUp() == '' ? 0 : 1),@" $PANEL_PATH/panel/modules/services/code/webservice.ext.php			
 		fi
@@ -1324,6 +1350,7 @@ if [[ "$REVERT" = "false" ]] ; then
 		change "" "g+w" root $ADMIN_GRP $PANEL_PATH/configs/proftpd/proftpd-mysql.conf
 		change "-R" "g+w" root $ADMIN_GRP /etc/proftpd/conf.d
 		change "" "g+w" root $ADMIN_GRP /etc/proftpd/*.conf
+		change "" "640" root $ADMIN_GRP $PANEL_DATA/logs/proftpd/*
 		service proftpd restart
 	fi
 else
@@ -1358,8 +1385,8 @@ if [[ "$REVERT" = "false" ]] ; then
 		# Public IP is trusted but localhost too
 		sed -i "s@acl trusted-servers {@acl trusted-servers {\n\tlocalhost;@" /etc/bind/named.conf
 		# Ensure there is no recursion and write additional security config
-		sed -i "s@recursion yes;@recursion no;@g" /etc/bind/named.conf
-		sed -i "s@recursion no;@recursion no;\n\tedns-udp-size 4096;\n\tmanaged-keys-directory \"/var/named/dynamic\";\n\tversion \"[hidden]\";@g" /etc/bind/named.conf
+		sed -i "s@recursion yes;@recursion no;@" /etc/bind/named.conf
+		sed -i "s@recursion no;@recursion no;\n\tedns-udp-size 4096;\n\tmanaged-keys-directory \"/var/named/dynamic\";\n\tversion \"[hidden]\";@" /etc/bind/named.conf
 		# File permissions
 		change "" "g+w" root $ADMIN_GRP /etc/bind/named.conf
 		change "-R" "g+w" root bind $PANEL_DATA/logs/bind
@@ -1546,12 +1573,14 @@ if [[ "$REVERT" = "false" ]] ; then
 			cp -v /etc/fail2ban/filter.d/* $SENTORA_PARANOID_BACKUP_PATH/fail2ban/filter.d
 			cp -v $SENTORA_PARANOID_CONFIG_PATH/fail2ban/filter.d/* /etc/fail2ban/filter.d
 			mkdir -vp $PANEL_DATA/logs/domains/_default
+			change "" "750" $ADMIN_USR $HTTP_GROUP $PANEL_DATA/logs/domains/_default
 			ln -s  /var/log/apache2/other_vhosts_error.log $PANEL_DATA/logs/domains/_default/error.log
 			mkdir -vp $PANEL_DATA/logs/roundcube
 			touch $PANEL_DATA/logs/roundcube/sessions
+			change "" "660" $ADMIN_USR $HTTP_GROUP $PANEL_DATA/logs/roundcube/sessions
 		fi
 		# Set localip
-		sed -i "s@%%LOCAL_IP%%@$local_ip@g" $SENTORA_PARANOID_CONFIG_PATH/fail2ban/jail.local
+		sed -i "s@%%LOCAL_IP%%@$local_ip@" $SENTORA_PARANOID_CONFIG_PATH/fail2ban/jail.local
 		cp -v $SENTORA_PARANOID_CONFIG_PATH/fail2ban/jail.local /etc/fail2ban
 		/etc/init.d/fail2ban restart
 	fi
@@ -1595,22 +1624,26 @@ if [[ "$REVERT" = "false" ]] ; then
 			update-rc.d apparmor defaults
 			rm -v /etc/apparmor.d/disable/usr.sbin.apache2
 			cp -v $SENTORA_PARANOID_CONFIG_PATH/apparmor.d/etc.sentora.panel.bin.zsudo /etc/apparmor.d
-			echo "NOTICE: sentora zsudo is confined this may affect sentora functionality"
+			echo "NOTICE: sentora zsudo is now confined this may affect sentora functionality"
 			cp -v $SENTORA_PARANOID_CONFIG_PATH/apparmor.d/usr.bin.php /etc/apparmor.d
-			echo "NOTICE: PHP is confined this may affect web applications functionality"
+			echo "NOTICE: PHP is now confined this may affect web applications functionality"
 			cp -v $SENTORA_PARANOID_CONFIG_PATH/apparmor.d/usr.sbin.named /etc/apparmor.d
-			echo "NOTICE: bind is confined this may affect DNS functionality"
+			echo "NOTICE: bind is now confined this may affect DNS functionality"
 			cp -v $SENTORA_PARANOID_CONFIG_PATH/apparmor.d/apache2.d/* /etc/apparmor.d/apache2.d
 			echo "NOTICE: apache is confined this may affect web server functionality"
 			change "-R" "g+w" root $ADMIN_GRP /etc/apparmor.d/apache2.d
 			echo "NOTICE: virtual hosts are confined this may affect virtualhost functionality"
 			aa-complain /etc/apparmor.d/*
 			echo "sentora-paranoid: why is this Multiple definitions exception ocurring here?"
+			echo "NOTICE: Some profiles are set to complain, you are encouraged to set to enforce when ready"
 			sed -i "s@<Directory /etc/sentora/panel>@<Directory /etc/sentora/panel>\n\tAAHatName sentora@" $PANEL_PATH/configs/apache/httpd.conf
-			sed -i 's@"  AllowOverride All" . fs_filehandler::NewLine()@"  AllowOverride All" . fs_filehandler::NewLine() . "  AAHatName vhost" . fs_filehandler::NewLine()@g' $PANEL_PATH/panel/modules/apache_admin/hooks/OnDaemonRun.hook.php
+			sed -i "s@#AAHatName sentora@AAHatName sentora@" $SENTORA_PARANOID_CONFIG_PATH/apache2/https.conf
+			cp -v $SENTORA_PARANOID_CONFIG_PATH/apache2/https.conf $PANEL_PATH/configs/apache/https.conf
+			sed -i 's@"  AllowOverride All" . fs_filehandler::NewLine()@"  AllowOverride All" . fs_filehandler::NewLine() . "  AAHatName vhost" . fs_filehandler::NewLine()@' $PANEL_PATH/panel/modules/apache_admin/hooks/OnDaemonRun.hook.php
 			a2enmod mpm_prefork
 			a2enmod apparmor
 			service apache2 restart
+			service bind9 restart
 			service apparmor start
 		fi
 	fi
@@ -1719,9 +1752,3 @@ if [[ "$OS" = "Ubuntu" ]]; then
     done
     shutdown -r now
 fi
-
-# [TO DO] Review
-# http://blog.mattbrock.co.uk/hardening-the-security-on-ubuntu-server-14-04/
-# http://konstruktoid.net/2014/04/29/hardening-the-ubuntu-14-04-server-even-further/
-# http://www.cyberciti.biz/tips/linux-security.html
-# http://security-24-7.com/hardening-guide-for-postfix-2-x/

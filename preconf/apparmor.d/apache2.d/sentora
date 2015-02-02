@@ -18,6 +18,7 @@
 	/bin/dash Ux,						# phpsysinfo via sentora
 	/etc/** r,
 	/run/mysqld/mysqld.sock rw,
+	/usr/lib/i386-linux-gnu/** mr,
 	/usr/lib/locale/locale-archive r,
 	/usr/share/locale-langpack/** r,
 	/usr/share/mysql/** r,

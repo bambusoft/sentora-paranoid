@@ -43,10 +43,10 @@ reinit_ipset()
 		ipset add BLACKLIST_NET 176.31.61.0/28 2>> /var/log/iptables.log
 		# ipv6
 		ipset destroy BLACKLIST_IP6 -q 2>> /var/log/iptables.log
-		ipset create BLACKLIST_IP6 hash:ip hashsize 2048 -q 2>> /var/log/iptables.log
+		ipset create BLACKLIST_IP6 hash:ip family inet6 hashsize 2048 -q 2>> /var/log/iptables.log
 		ipset flush BLACKLIST_IP6 2>> /var/log/iptables.log
 		ipset destroy BLACKLIST_NET6 -q 2>> /var/log/iptables.log
-		ipset create BLACKLIST_NET6 hash:net hashsize 1024 -q 2>> /var/log/iptables.log
+		ipset create BLACKLIST_NET6 hash:net family inet6 hashsize 1024 -q 2>> /var/log/iptables.log
 		ipset flush BLACKLIST_NET6 2>> /var/log/iptables.log
 	fi
 }

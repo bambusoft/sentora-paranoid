@@ -21,13 +21,14 @@ please take a look to the log file created and check for any undesirable results
 
 5) If you found any inconsistency between actual results and those you expected
 or you want to return sentora to its original state, you can execute the script
-with the - revert - option (This can be done only inmediatly after sentora-paranoid
-installation because all configurations will be restored loosing any possible
-changes)
+with the - revert - EXPERIMENTAL option (This can be done only inmediatly after
+sentora-paranoid installation because all configurations will be restored loosing
+any possible changes)
 
 6) To review server daemons status use: > sentora-paranoid.sh status
 
 7) Please report any bug or suggestion in the sentora-paranoid project forums.
+http://forums.sentora-paanoid.open-source.tk
 
 ------
 

@@ -1,0 +1,29 @@
+#!/bin/bash
+#
+# Author Mario Rodriguez < sentora-paranoid (at) open.source.tk >
+#
+# Known bugs: [ domain.TLD ] will be skiped if [ domain.TLD.ccTLD  ] exists
+#
+if [ $UID -ne 0 ]; then
+	echo -e "Execuion failed: you must be logged in as 'root' to proceed."
+	exit 1
+fi
+echo "Generating $1 key and TXT"
+mkdir -p /etc/opendkim/keys/$1
+cd /etc/opendkim/keys/$1
+opendkim-genkey -s mail -d $1 --verbose
+chown -R opendkim:opendkim /etc/opendkim/keys/$1
+chmod 640 /etc/opendkim/keys/$1/mail.private
+chmod 644 /etc/opendkim/keys/$1/mail.txt
+chmod 775 /etc/opendkim/keys/$1
+if ! grep -q "*.$1" /etc/opendkim/TrustedHosts ; then
+	echo "*.$1" >> /etc/opendkim/TrustedHosts
+fi
+if ! grep -q "domainkey.$1" /etc/opendkim/KeyTable ; then
+	echo "mail._domainkey.$1 $1:mail:/etc/opendkim/keys/$1/mail.private" >> /etc/opendkim/KeyTable
+fi
+if ! grep -q "$1" /etc/opendkim/SigningTable ; then
+	echo "*@$1 mail._domainkey.$1" >> /etc/opendkim/SigningTable
+fi
+echo "DNS TXT stored in: /etc/opendkim/keys/$1/mail.txt"
+echo ""

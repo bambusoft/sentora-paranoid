@@ -38,7 +38,7 @@ if [[ "$1" = "clean" ]] ; then
 	exit
 fi
 
-SENTORA_PARANOID_VERSION="1.0.0-150202"	# This installer version
+SENTORA_PARANOID_VERSION="1.0.0-dev-snapshot"	# This installer version
 SENTORA_INSTALLER_VERSION="1.0.0"	# Script version used to install sentora
 SENTORA_CORE_VERSION="1.0.0"		# Sentora core versión
 SENTORA_PRECONF_VERSION="1.0.0"		# Preconf used by sentora script installer
@@ -339,14 +339,24 @@ if [[ "$REVERT" = "false" ]] ; then
 		INSTALL_MTA_CF="false"
 	fi
 	# Apparmor packages
-	ask_user_yn "Do you wish to install apparmor" "y"
-	if [[ "$RESULT" = "yes" ]] ; then
-		INSTALL_ARMOR="true"
+	if [ -f /proc/config.gz ] ; then 
+		APPARMOR_MODULE=$(zgrep "CONFIG_SECURITY_APPARMOR\b" /proc/config.gz | grep 'is not set')
 	else
+		APPARMOR_MODULE=$(grep "CONFIG_SECURITY_APPARMOR\b" /boot/config* | grep 'is not set')
+	fi
+	if [ -z "$APPARMOR_MODULE" ] ; then
+		ask_user_yn "Do you wish to install apparmor" "y"
+		if [[ "$RESULT" = "yes" ]] ; then
+			INSTALL_ARMOR="true"
+		else
+			INSTALL_ARMOR="false"
+		fi
+	else
+		echo "NOTICE: This kernel does not has apparmor module installed: [ $APPARMOR_MODULE ]"
 		INSTALL_ARMOR="false"
-	fi	
+	fi
 	# Security modules
-	ask_user_yn "Do you wish to install security modules (experimental)" "n"
+	ask_user_yn "Do you wish to install sentora security modules (experimental)" "n"
 	if [[ "$RESULT" = "yes" ]] ; then
 		INSTALL_MODULE="true"
 	else
@@ -627,13 +637,14 @@ if [[ "$REVERT" = "false" ]] ; then
 	find $PANEL_PATH/panel/etc/tmp -type d -exec chmod 775 {} +
 	find $PANEL_PATH/panel/etc/tmp -type f -exec chmod 664 {} +
 	change "" "775" root $HTTP_GROUP $PANEL_PATH/panel/etc/apps/webmail/temp
-	find /etc/zpanel/panel/modules -type d -exec chmod 755 {} +
-	find /etc/zpanel/panel/modules -type f -exec chmod 644 {} +
+	find $PANEL_PATH/panel/modules -type d -exec chmod 755 {} +
+	find $PANEL_PATH/panel/modules -type f -exec chmod 644 {} +
 	change "" "755" root root $PANEL_PATH/configs
 	change "" "755" root root $PANEL_PATH/docs
 	change "" "755" root root $PANEL_PATH/panel
 	mkdir -vp $PANEL_PATH/panel/modules/webalizer_stats/stats
 	change "-R" "775" $ADMIN_USR $HTTP_GROUP $PANEL_PATH/panel/modules/webalizer_stats/stats
+	change "" "774" root $ADMIN_GRP $PANEL_PATH/configs/postfix/vacation.pl
 	echo "NOTICE: $PANEL_PATH file permissions changed, this will affect core and module updates"
 	# PANEL DATA
 	change "" "664" root $ADMIN_GRP $PANEL_DATA/sieve/globalfilter.sieve
@@ -792,10 +803,10 @@ if [[ "$REVERT" = "false" ]] ; then
 		sed -i "s@#smtpd_tls_received_header@smtpd_tls_received_header@" $PANEL_PATH/configs/postfix/main.cf
 		sed -i "s@#smtpd_tls_session_cache_timeout@smtpd_tls_session_cache_timeout@" $PANEL_PATH/configs/postfix/main.cf
 		sed -i "s@#tls_random_source@tls_random_source@" $PANEL_PATH/configs/postfix/main.cf
-		sed -i "s@#smtpd_tls_key_file@smtpd_tls_key_file = $SENTORA_PARANOID_CONFIG_PATH/openssl/keys/${FQDN}.key\n#@" $PANEL_PATH/configs/postfix/main.cf
+		sed -i "s@#smtpd_tls_key_file@smtpd_tls_key_file = $SENTORA_PARANOID_CONFIG_PATH/openssl/keys/${FQDN}-nophrase.key\n#@" $PANEL_PATH/configs/postfix/main.cf
 		sed -i "s@#smtpd_tls_cert_file@smtpd_tls_cert_file = $SENTORA_PARANOID_CONFIG_PATH/openssl/certs/${FQDN}.crt\n#@" $PANEL_PATH/configs/postfix/main.cf
 		sed -i "s@#smtpd_tls_CAfile@smtpd_tls_CAfile = $SENTORA_PARANOID_CONFIG_PATH/openssl/certs/root-ca.crt@" $PANEL_PATH/configs/postfix/main.cf
-		sed -i "s@pickup@smtps inet n - n - - smtpd\n -o smtpd_tls_wrappermode=yes -o smtpd_sasl_auth_enable=yes\npickup@" $PANEL_PATH/configs/postfix/master.cf
+		sed -i "s@pickup@smtps     inet	n 		- 		n 		-		 -		smtpd\n -o smtpd_tls_wrappermode=yes -o smtpd_sasl_auth_enable=yes\npickup@" $PANEL_PATH/configs/postfix/master.cf
 		#
 		# Add this into documentation not here
 		# To test TLS in your server
@@ -850,35 +861,46 @@ if [[ "$REVERT" = "false" ]] ; then
 			cp -v /etc/opendkim.conf $SENTORA_PARANOID_BACKUP_PATH/opendkim
 		fi
 		mkdir -vp /etc/opendkim /etc/opendkim/keys /var/log/dkim-filter
-		change "-R" "775" $ADMIN_USR opendkim  /etc/opendkim
-		change "-R" "775" $ADMIN_USR opendkim /etc/opendkim/keys
-		change "-R" "775" $ADMIN_USR opendkim /var/log/dkim-filter
-		cp -v $SENTORA_PARANOID_CONFIG_PATH/opendkim/opendkim.conf /etc/opendkim/opendkim.conf
-		sed -i "s@%%DOMAIN@$FQDN@" /etc/opendkim/opendkim.conf
+		change "-R" "775" opendkim opendkim  /etc/opendkim
+		change "-R" "775" opendkim opendkim /etc/opendkim/keys
+		change "-R" "775" opendkim opendkim /var/log/dkim-filter
+		sed -i "s@%%DOMAIN%%@$FQDN@g" $SENTORA_PARANOID_CONFIG_PATH/opendkim/opendkim.conf
 		ln -vsf opendkim/opendkim.conf /etc/opendkim.conf
-		if ! grep -q "inet:12305" $PANEL_PATH/configs/postfix/main.cf ; then
-			echo "SOCKET=\"inet:12305@localhost\" # listen on loopback on port 12305" >> /etc/default/opendkim
+		POSTFIX_ID=$(id -u postfix)
+		sed -i "s@%%POSTFIX_ID%%@$POSTFIX_ID@" $SENTORA_PARANOID_CONFIG_PATH/opendkim/opendkim.conf
+		cp -vr $SENTORA_PARANOID_CONFIG_PATH/opendkim/* /etc/opendkim
+		if ! grep -q "inet:10026" $PANEL_PATH/configs/postfix/main.cf ; then
+			echo "SOCKET=\"inet:10026@localhost\" # listen on loopback on port 10026" >> /etc/default/opendkim
 		fi
 		if ! grep -q "milter_protocol" $PANEL_PATH/configs/postfix/main.cf ; then
 			echo "" >> $PANEL_PATH/configs/postfix/main.cf
 			echo "# dkim with postfix" >> $PANEL_PATH/configs/postfix/main.cf
 			echo "milter_protocol = 2" >> $PANEL_PATH/configs/postfix/main.cf
 			echo "milter_default_action = accept" >> $PANEL_PATH/configs/postfix/main.cf
+			echo "smtpd_milters=" >> $PANEL_PATH/configs/postfix/main.cf
+			echo "" >> $PANEL_PATH/configs/postfix/main.cf
 		fi
 		echo "127.0.0.1" > /etc/opendkim/TrustedHosts
 		echo "localhost" >> /etc/opendkim/TrustedHosts
 		echo $local_ip >> /etc/opendkim/TrustedHosts
+		echo "*.$FQDN" >> /etc/opendkim/TrustedHosts
 		echo "mail._domainkey.$FQDN $FQDN:mail:/etc/opendkim/keys/$FQDN/mail.private" > /etc/opendkim/KeyTable
 		echo "*@$FQDN mail._domainkey.$FQDN" > /etc/opendkim/SigningTable
-		echo "NOTICE: opendkim is configured but be sure to add valid keys, signatures and trusted hosts for each domain or legitimate emails could be marked as BULK or SPAM"
+		echo "NOTICE: opendkim is configured, be sure to add valid keys, signatures, trusted hosts and DNS TXT and PTR entries for each domain or legitimate emails could be marked as BULK or SPAM"
 		mkdir -vp /etc/opendkim/keys/$FQDN
 		/usr/bin/opendkim-genkey -s mail -d /etc/opendkim/keys/$FQDN
 		if [ -f ./mail.private ] ; then
 			mv -v ./mail.{txt,private} /etc/opendkim/keys/$FQDN
 		fi
-		change "-R" "660" $ADMIN_USR opendkim /etc/opendkim/keys/$FQDN
-		change "" "770" $ADMIN_USR opendkim /etc/opendkim/keys/$FQDN
-		# Both services are restarted in amavis-new section
+		change "" "750" root $ADMIN_GRP /etc/opendkim/gendkimkey
+		change "" "664" opendkim opendkim /etc/default/opendkim
+		change "-R" "660" opendkim opendkim /etc/opendkim/keys/$FQDN
+		change "" "770" opendkim opendkim /etc/opendkim/keys/$FQDN
+		change "" "660" opendkim $ADMIN_GRP /etc/opendkim/opendkim.conf
+		change "" "660" opendkim $ADMIN_GRP /etc/opendkim/KeyTable
+		change "" "660" opendkim $ADMIN_GRP /etc/opendkim/SigningTable
+		change "" "660" opendkim $ADMIN_GRP /etc/opendkim/TrustedHosts
+		# Both services may be restarted in amavis-new section
 		service postfix restart
 		service opendkim restart
 	fi
@@ -924,11 +946,13 @@ if [[ "$REVERT" = "false" ]] ; then
 		if [[ "$OS" = "Ubuntu" ]]; then
 			adduser amavis clamav
 			sed -i "s@1;@@" /etc/amavis/conf.d/15-content_filter_mode
-			echo "@bypass_virus_checks_maps = (" /etc/amavis/conf.d/15-content_filter_mode
-			echo " \%bypass_virus_checks, \@bypass_virus_checks_acl, \$bypass_virus_checks_re);" /etc/amavis/conf.d/15-content_filter_mode
-			echo "@bypass_spam_checks_maps = (" /etc/amavis/conf.d/15-content_filter_mode
-			echo " \%bypass_spam_checks, \@bypass_spam_checks_acl, \$bypass_spam_checks_re);" /etc/amavis/conf.d/15-content_filter_mode
-			echo "1;"
+			echo "@bypass_virus_checks_maps = (" >> /etc/amavis/conf.d/15-content_filter_mode
+			echo " \%bypass_virus_checks, \@bypass_virus_checks_acl, \$bypass_virus_checks_re);" >> /etc/amavis/conf.d/15-content_filter_mode
+			echo "@bypass_spam_checks_maps = (" >> /etc/amavis/conf.d/15-content_filter_mode
+			echo " \%bypass_spam_checks, \@bypass_spam_checks_acl, \$bypass_spam_checks_re);" >> /etc/amavis/conf.d/15-content_filter_mode
+			echo "1;"  >> /etc/amavis/conf.d/15-content_filter_mode
+			sed -i 's@X_HEADER_LINE = "Debian@X_HEADER_LINE = "sentora-paranoid@' /etc/amavis/conf.d/20-debian_defaults
+			sed -i 's@enable_dkim_verification = 1@enable_dkim_verification = 0@' /etc/amavis/conf.d/21-ubuntu_defaults
 			AMAVISC="/etc/amavis/conf.d/50-user"
 			echo "use strict;" > $AMAVISC
 			echo "@local_domains_acl = qw(.);" >> $AMAVISC
@@ -938,9 +962,9 @@ if [[ "$REVERT" = "false" ]] ; then
 			echo "# \$sa_tag2_level_deflt = 6.31; # add 'spam detected' headers at that level" >> $AMAVISC
 			echo "\$sa_kill_level_deflt = 8.0; # triggers spam evasive actions" >> $AMAVISC
 			echo "# \$sa_dsn_cutoff_level = 10; # spam level beyond which a DSN is not sent" >> $AMAVISC
-			echo "# \$final_spam_destiny = D_PASS;" >> $AMAVISC
+			echo "\$final_spam_destiny = D_PASS; # let users deal with it" >> $AMAVISC # Change to D_DISCARD when things were going well
 			echo "# \$final_spam_destiny = D_REJECT; # default " >> $AMAVISC
-			echo "\$final_spam_destiny = D_BOUNCE; # debian default " >> $AMAVISC # Change to D_DISCARD when things were going well
+			echo "# \$final_spam_destiny = D_BOUNCE; # debian default " >> $AMAVISC
 			echo "# \$final_spam_destiny = D_DISCARD; # ubuntu default, recommended as sender is usually faked" >> $AMAVISC
 			echo "1;" >> $AMAVISC
 			if ! grep -q "smtp-amavis" $PANEL_PATH/configs/postfix/master.cf ; then
@@ -962,21 +986,32 @@ if [[ "$REVERT" = "false" ]] ; then
 				echo "        -o smtpd_recipient_restrictions=permit_mynetworks,reject" >> $PANEL_PATH/configs/postfix/master.cf
 				echo "        -o smtpd_data_restrictions=reject_unauth_pipelining" >> $PANEL_PATH/configs/postfix/master.cf
 				echo "        -o smtpd_end_of_data_restrictions=" >> $PANEL_PATH/configs/postfix/master.cf
-				echo "        -o mynetworks=127.0.0.0/8" >> $PANEL_PATH/configs/postfix/master.cf
+				echo "        -o mynetworks=$PANEL_PATH/configs/postfix/mynetworks" >> $PANEL_PATH/configs/postfix/master.cf
 				echo "        -o smtpd_error_sleep_time=0" >> $PANEL_PATH/configs/postfix/master.cf
 				echo "        -o smtpd_soft_error_limit=1001" >> $PANEL_PATH/configs/postfix/master.cf
 				echo "        -o smtpd_hard_error_limit=1000" >> $PANEL_PATH/configs/postfix/master.cf
 				echo "        -o smtpd_client_connection_count_limit=0" >> $PANEL_PATH/configs/postfix/master.cf
-				echo "        -o smtpd_client_connection_rate_limit=0" >> $PANEL_PATH/configs/postfix/master.cf
+				echo "        -o smtpd_helo_required=no" >> $PANEL_PATH/configs/postfix/master.cf
+				echo "        -o smtpd_restriction_classes=" >> $PANEL_PATH/configs/postfix/master.cf
+				echo "        -o disable_vrfy_command=no" >> $PANEL_PATH/configs/postfix/master.cf
+				echo "        -o strict_rfc821_envelopes=yes" >> $PANEL_PATH/configs/postfix/master.cf
+				echo "        -o smtpd_milters=inet:localhost:10026" >> $PANEL_PATH/configs/postfix/master.cf
 				echo "        -o receive_override_options=no_header_body_checks,no_unknown_recipient_checks" >> $PANEL_PATH/configs/postfix/master.cf
 				sed -i "s@pickup@pickup	  fifo	n	-	-	60	1	pickup\n\t-o content_filter=\n\t-o receive_override_options=no_header_body_checks\n#@" $PANEL_PATH/configs/postfix/master.cf
+			fi
+			if ! grep -q "smtpd_milters" $PANEL_PATH/configs/postfix/main.cf ; then
+				sed -i "s@strict_rfc821_envelopes=yes@strict_rfc821_envelopes=yes\n  -o smtpd_milters=inet:localhost:10026#@" $PANEL_PATH/configs/postfix/master.cf
+			fi
+			if ! grep -q "smtp-amavis" $PANEL_PATH/configs/postfix/main.cf ; then
 				echo "content_filter = smtp-amavis:[127.0.0.1]:10024" >> $PANEL_PATH/configs/postfix/main.cf
 			fi
 			if ! grep -q ">amavisd<" $PANEL_PATH/panel/modules/services/code/controller.ext.php ; then
 				sed -i "s@\$line .= '</table>';@\$line .= '<tr><th>amavisd</th><td>'   . module_controller::status_port(10024, \$iconpath) . '</td></tr>';\n\t\$line .= '</table>';@" $PANEL_PATH/panel/modules/services/code/controller.ext.php
 				sed -i "s@\$line .= '</table>';@\$line .= '<tr><th>amavisr</th><td>'   . module_controller::status_port(10025, \$iconpath) . '</td></tr>';\n\t\$line .= '</table>';@" $PANEL_PATH/panel/modules/services/code/controller.ext.php
+				sed -i "s@\$line .= '</table>';@\$line .= '<tr><th>opendkim</th><td>'   . module_controller::status_port(10026, \$iconpath) . '</td></tr>';\n\t\$line .= '</table>';@" $PANEL_PATH/panel/modules/services/code/controller.ext.php
 				sed -i "s@static function getIsSMTPUp()@static function getIsAMAVISDUp() { return sys_monitoring::PortStatus(10024); }\n\tstatic function getIsSMTPUp()@" $PANEL_PATH/panel/modules/services/code/controller.ext.php
 				sed -i "s@static function getIsSMTPUp()@static function getIsAMAVISRUp() { return sys_monitoring::PortStatus(10025); }\n\tstatic function getIsSMTPUp()@" $PANEL_PATH/panel/modules/services/code/controller.ext.php
+				sed -i "s@static function getIsSMTPUp()@static function getIsDKIMRUp() { return sys_monitoring::PortStatus(10026); }\n\tstatic function getIsSMTPUp()@" $PANEL_PATH/panel/modules/services/code/controller.ext.php
 				sed -i "s@'smtp' => (module_controller::getIsSMTPUp() == '' ? 0 : 1),@'amavisd' => (module_controller::getIsAMAVISDUp() == '' ? 0 : 1),\n\t'smtp' => (module_controller::getIsSMTPUp() == '' ? 0 : 1),@" $PANEL_PATH/panel/modules/services/code/webservice.ext.php
 				sed -i "s@'smtp' => (module_controller::getIsSMTPUp() == '' ? 0 : 1),@'amavisr' => (module_controller::getIsAMAVISRUp() == '' ? 0 : 1),\n\t'smtp' => (module_controller::getIsSMTPUp() == '' ? 0 : 1),@" $PANEL_PATH/panel/modules/services/code/webservice.ext.php
 			fi
@@ -1061,6 +1096,7 @@ if [[ "$REVERT" = "false" ]] ; then
 		# Do not expose php installed (web only)
 		sed -i "s@expose_php = On@expose_php = Off@" /etc/php5/apache2/php.ini
 		# Reduce error reporting in production web server
+		sed -i "s@mail.add_x_header = On@mail.add_x_header = Off@" /etc/php5/apache2/php.ini
 		sed -i 's/error_reporting =.*/error_reporting = E_ALL \& \~E_DEPRECATED/' /etc/php5/apache2/php.ini
 		sed -i "s@display_errors = On@display_errors = Off@" /etc/php5/apache2/php.ini
 		sed -i "s@display_startup_errors = On@display_startup_errors = Off@" /etc/php5/apache2/php.ini
@@ -1068,6 +1104,7 @@ if [[ "$REVERT" = "false" ]] ; then
 		sed -i "s@html_errors = On@html_errors = Off@" /etc/php5/apache2/php.ini
 		echo "NOTICE: PHP error reporting has been reduced for production environment"
 		# Reduce error reporting in system console		
+		sed -i "s@mail.add_x_header = On@mail.add_x_header = Off@" /etc/php5/cli/php.ini
 		sed -i "s@error_reporting =.*@error_reporting = E_ALL \& \~E_DEPRECATED \& \~E_NOTICE@" /etc/php5/cli/php.ini
 		sed -i "s@display_errors = On@display_errors = Off@" /etc/php5/cli/php.ini
 		sed -i "s@display_startup_errors = On@display_startup_errors = Off@" /etc/php5/cli/php.ini
@@ -1200,7 +1237,7 @@ if [[ "$REVERT" = "false" ]] ; then
 		# remove security config override in sentora/httpd.conf, the rigth place is security.conf
 		sed -i "s@ServerTokens Prod@#ServerTokens Prod@" $PANEL_PATH/configs/apache/httpd.conf
 		# Add host(ing) signature
-		if ! grep -q "Header set X-Hosting" /etc/apache2/apache.conf; then
+		if ! grep -q "Header set X-Hosting" /etc/apache2/apache2.conf; then
 			echo "Header set X-Hosting \"$FQDN\"" >> /etc/apache2/apache2.conf
 		fi
 		# The default error log file is ${APACHE_LOG_DIR}/error.log, is better to split vhost error log from apache2 errors,
@@ -1313,39 +1350,24 @@ if [[ "$REVERT" = "false" ]] ; then
 			touch /var/sentora/logs/proftpd/sftp.log
 		fi
 		# We are not sure if the administrator email exists and if it is necesary to change this email use next command
-		# sed -i "s/root@localhost/$ADMIN_USR@$FQDN/" $PANEL_PATH/configs/proftpd/proftpd-mysql.conf
+		# sed -i "s/root@localhost/$ADMIN_USR@$FQDN/" $SENTORA_PARANOID_CONFIG_PATH/proftpd/proftpd-mysql.conf
 		#
 		# Do not tell to much about what software are you running
-		sed -i "s/Sentora FTP Server/Nice FTP Server/" $PANEL_PATH/configs/proftpd/proftpd-mysql.conf
+		sed -i "s/Nice FTP Server/$FQDN FTP Server/" $SENTORA_PARANOID_CONFIG_PATH/proftpd/proftpd-mysql.conf
+		sed -i "s/Nice sFTP Server/$FQDN sFTP Server/" $SENTORA_PARANOID_CONFIG_PATH/proftpd/proftpd-mysql.conf
 		#
 		# Enable sftp
-		if ! grep -q "LoadModule mod_sftp.c" $PANEL_PATH/configs/proftpd/proftpd-mysql.conf ; then
-			echo "NOTICE: sftp enabled to listen in default port 115"
-			echo "LoadModule mod_sftp.c" >> $PANEL_PATH/configs/proftpd/proftpd-mysql.conf
-			echo "<IfModule mod_sftp.c>" >> $PANEL_PATH/configs/proftpd/proftpd-mysql.conf
-			echo "  <VirtualHost $local_ip>" >> $PANEL_PATH/configs/proftpd/proftpd-mysql.conf
-			echo "		SFTPEngine on" >> $PANEL_PATH/configs/proftpd/proftpd-mysql.conf
-			echo "		Port 115" >> $PANEL_PATH/configs/proftpd/proftpd-mysql.conf
-			echo "		SFTPLog $PANEL_DATA/logs/proftpd/sftp.log" >> $PANEL_PATH/configs/proftpd/proftpd-mysql.conf
-			echo "" >> $PANEL_PATH/configs/proftpd/proftpd-mysql.conf
-			echo "		# Configure both the RSA and DSA host keys, using the same host key" >> $PANEL_PATH/configs/proftpd/proftpd-mysql.conf
-			echo "		# files that OpenSSH uses." >> $PANEL_PATH/configs/proftpd/proftpd-mysql.conf
-			echo "		SFTPHostKey /etc/ssh/ssh_host_rsa_key" >> $PANEL_PATH/configs/proftpd/proftpd-mysql.conf
-			echo "		SFTPHostKey /etc/ssh/ssh_host_dsa_key" >> $PANEL_PATH/configs/proftpd/proftpd-mysql.conf
-			echo "" >> $PANEL_PATH/configs/proftpd/proftpd-mysql.conf
-			echo "		#SFTPAuthMethods publickey" >> $PANEL_PATH/configs/proftpd/proftpd-mysql.conf
-			echo "		#SFTPAuthorizedUserKeys file:$PANEL_PATH/configs/proftpd/authorized_keys/%u" >> $PANEL_PATH/configs/proftpd/proftpd-mysql.conf
-			echo "		SFTPAuthMethods password" >> $PANEL_PATH/configs/proftpd/proftpd-mysql.conf
-			echo "		# Enable compression" >> $PANEL_PATH/configs/proftpd/proftpd-mysql.conf
-			echo "		SFTPCompression delayed" >> $PANEL_PATH/configs/proftpd/proftpd-mysql.conf
-			echo "  </VirtualHost>" >> $PANEL_PATH/configs/proftpd/proftpd-mysql.conf
-			echo "</IfModule>" >> $PANEL_PATH/configs/proftpd/proftpd-mysql.conf
-		fi
+		sed -i "s/%%LOCAL_IP%%/$local_ip/" $SENTORA_PARANOID_CONFIG_PATH/proftpd/proftpd-mysql.conf
+		PWDFILE="/root/passwords.txt"
+		FTP_PWD=$(grep "ProFTP" $PWDFILE | sed -e "s@MySQL ProFTPd Password\s*:\s@@")
+		sed -i "s/%%PASSWD%%/$FTP_PWD/" $SENTORA_PARANOID_CONFIG_PATH/proftpd/proftpd-mysql.conf
+		cp -v $SENTORA_PARANOID_CONFIG_PATH/proftpd/proftpd-mysql.conf $PANEL_PATH/configs/proftpd/proftpd-mysql.conf
 		if ! grep -q ">sFTP<" $PANEL_PATH/panel/modules/services/code/controller.ext.php ; then
 			sed -i "s@\$line .= '</table>';@\$line .= '<tr><th>sFTP</th><td>'   . module_controller::status_port(115, \$iconpath) . '</td></tr>';\n\t\$line .= '</table>';@" $PANEL_PATH/panel/modules/services/code/controller.ext.php
 			sed -i "s@static function getIsFTPUp()@static function getIsSFTPUp() { return sys_monitoring::PortStatus(115); }\n\tstatic function getIsFTPUp()@" $PANEL_PATH/panel/modules/services/code/controller.ext.php
 			sed -i "s@'ftp' => (module_controller::getIsFTPUp() == '' ? 0 : 1),@'ftp' => (module_controller::getIsFTPUp() == '' ? 0 : 1),\n\t'sftp' => (module_controller::getIsSFTPUp() == '' ? 0 : 1),@" $PANEL_PATH/panel/modules/services/code/webservice.ext.php			
 		fi
+		echo "NOTICE: sftp enabled to listen in default port 115 you can now close unsecure port 21"
 		# File permissions
 		change "" "g+w" root $ADMIN_GRP $PANEL_PATH/configs/proftpd/proftpd-mysql.conf
 		change "-R" "g+w" root $ADMIN_GRP /etc/proftpd/conf.d

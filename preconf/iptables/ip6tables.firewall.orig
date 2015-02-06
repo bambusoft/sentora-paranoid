@@ -46,6 +46,7 @@
 # SMTP
 -A INPUT -p tcp --dport 25 -j ACCEPT
 -A INPUT -p tcp --dport 465 -j ACCEPT
+#-A INPUT -p tcp --dport 2525 -j ACCEPT
 
 # POP3
 -A INPUT -p tcp --dport 110 -j ACCEPT

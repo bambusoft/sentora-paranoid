@@ -1,7 +1,7 @@
-*nat
+#*nat
 # Some ISPs blocks port 25 to avoid SPAM so we can use 2525 to give users an alternative port
--A PREROUTING -p tcp --dport 2525 -j REDIRECT --to-ports 25
-COMMIT
+#-A PREROUTING -p tcp --dport 2525 -j REDIRECT --to-ports 25
+#COMMIT
 
 *filter
 
@@ -44,6 +44,7 @@ COMMIT
 # SMTP
 -A INPUT -p tcp --dport 25 -j ACCEPT
 -A INPUT -p tcp --dport 465 -j ACCEPT
+#-A INPUT -p tcp --dport 2525 -j ACCEPT
 
 # POP3
 -A INPUT -p tcp --dport 110 -j ACCEPT

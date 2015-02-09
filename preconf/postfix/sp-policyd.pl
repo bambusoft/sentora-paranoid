@@ -38,7 +38,6 @@ my $semaphore = new Thread::Semaphore;
 #CONFIGURATION SECTION (this data must be taken from /etc/sentora/configs/sentora-paranoid/postfix/sp-policyd.conf)
 my @allowedhosts = ('127.0.0.1', '%%LOCAL_IP%%');
 my $LOGFILE = "/var/sentora/logs/sp-policyd.log";
-chomp( my $vhost_dir = `pwd`);
 my $port = 24;	# Private mail port
 my $listen_address = '0.0.0.0';
 my $s_key_type = 'email'; #domain or email
@@ -52,8 +51,8 @@ my $db_timecol = 'timestamp';
 my $db_wherecol = 'username';
 my $deltaconf = 'hourly'; #hourly, daily, weekly, monthly
 my $sql_getquota = "SELECT $db_quotacol, $db_tallycol, $db_timecol FROM $db_table WHERE $db_wherecol = ? AND $db_quotacol > 0";
-#my $sql_updatequota = "UPDATE $db_table SET $db_tallycol = ?, $db_timecol = ? WHERE $db_wherecol = ?";
-my $sql_updatequota = "UPDATE $db_table SET $db_tallycol = $db_tallycol + ?, $db_timecol = ? WHERE $db_wherecol = ?";
+my $sql_updatequota = "UPDATE $db_table SET $db_tallycol = ?, $db_timecol = ? WHERE $db_wherecol = ?";
+#my $sql_updatequota = "UPDATE $db_table SET $db_tallycol = $db_tallycol + ?, $db_timecol = ? WHERE $db_wherecol = ?";
 #END OF CONFIGURATION SECTION
 $0=join(' ',($0,@ARGV));
 
@@ -78,7 +77,13 @@ listen(SERVER, SOMAXCONN) or die "listen: $!";
 &daemonize;
 $SIG{TERM} = \&sigterm_handler;
 $SIG{HUP} = \&print_cache;
-while (1) {
+
+# #######################
+# Main server entry point
+# #######################
+while (1) {	# Forever
+
+	# Start processes 
 	my $i = 0;
 	my @threads;
 	while($i < $thread_count){
@@ -87,17 +92,25 @@ while (1) {
 		logger("Started thread num $i.");
 		$i++;
 	}
+	
+	# Repetitive tasks
 	while(1){
 		sleep 5;
 		$cnt++;
 		my $r = 0;
 		my $w = 0;
+		# Commit results and flush cache every time_cycle
 		if($cnt % 6 == 0){
 			lock($lock);
-			&commit_cache;
-			&flush_cache;
-			#logger("Master: cache committed and flushed");
+			if (%quotahash) {
+				#&print_cache;
+				&commit_cache;
+				&flush_cache;
+				logger("Master: cache committed and flushed");
+			}
 		}
+		
+		#Mantain process balance
 		while (my ($k, $v) = each(%scoreboard)){
 			if($v eq 'running'){
 				$r++;
@@ -109,6 +122,8 @@ while (1) {
 			threads->new(\&start_thr);
 			logger("New thread started");
 		}
+		
+		# Show stats
 		if($cnt % 150 == 0){
 			logger("STATS: threads running: $r, threads waiting $w.");
 		}
@@ -117,6 +132,9 @@ while (1) {
 
 exit;
 
+# ####################
+# sp-policy subprocess
+# ####################
 sub start_thr {
 	my $threadid = threads->tid();
 	my $client_addr;
@@ -130,7 +148,7 @@ sub start_thr {
 		$semaphore->up();
 		$scoreboard{$threadid} = 'running';
 		if(!$client_addr){
-			logger("TID: $threadid accept() failed with: $!");
+			#logger("TID: $threadid accept() failed with: $!");	# Why did this throws a lot of messages at end of subprocess?
 			next;
 		}	
 		my ($client_port, $client_ip) = unpack_sockaddr_in($client_addr);
@@ -139,7 +157,8 @@ sub start_thr {
 		
 		select($client);
 		$|=1;
-	
+
+		# is this IP allowed? then process, else disconnect
 		if(grep $_ eq $client_ipnum, @allowedhosts){
 			#my $client_host = gethostbyaddr($client_ip, AF_INET);
 			#if (! defined ($client_host)) { $client_host=$client_ipnum;}
@@ -147,7 +166,7 @@ sub start_thr {
 			my @buf;
 			while(!eof($client)) {
 				$message = <$client>;
-				if($message =~ m/printshm/){
+				if($message =~ m/printshm/){	##### msg: printshm
 					my $r=0;
 					my $w =0;
 					print $client "Printing shm:\r\n";
@@ -165,12 +184,13 @@ sub start_thr {
 					}
 					print $client "Threads running: $r, Threads waiting: $w\r\n";
 					last;
-				}elsif($message =~ m/=/){
+				}elsif($message =~ m/=/){		##### msg: =
 					push(@buf, $message);
 					next;
-				}elsif($message == "\r\n"){
-					#logger("Handle new request");
+				}elsif($message == "\r\n"){		##### msg: CR+LF
+					logger("Handle new request with: $threadid");
 					my $ret = &handle_req(@buf);
+					logger("Finished request by: $threadid");
 					if($ret =~ m/unknown/){
 						last;
 					#New thread model - old code
@@ -180,7 +200,7 @@ sub start_thr {
 						print $client "action=$ret\n\n";
 					}
 					@buf = ();
-				}else{
+				}else{									##### msg: not understood
 					print $client "message not understood\r\n";
 				}
 			}
@@ -195,12 +215,17 @@ sub start_thr {
 	threads->exit(0);
 }
 
+# ####################
+# handle client request
+# ####################
 sub handle_req {
 	my @buf = @_;
 	my $protocol_state;
 	my $sasl_username; 
 	my $recipient_count;
 	local $/ = "\n";
+	
+	# Get postfix sended parameters
 	foreach $aline(@buf){
 		my @line = split("=", $aline);
 		chomp(@line);
@@ -218,64 +243,63 @@ sub handle_req {
 		}
 	}
 
-	#if($recipient_count <= 5){
-	#	$recipient_count = 1;
-	#}
-
+	# Mail does not contains DATA section or identified user, lets postfix handle it
 	if($protocol_state !~ m/DATA/ || $sasl_username eq "" ){
 		return "ok";
 	}
 	
+	# Get current domain/email
 	my $skey = '';
 	if($s_key_type eq 'domain'){
 		$skey = (split("@", $sasl_username))[1];
 	}else{
 		$skey = $sasl_username;
-	}
-	#TODO: Maybe i should move to semaphore!!!
-	lock($lock);
-	if(!exists($quotahash{$skey})){
-		logger("Looking for $skey");
+	}	
+	
+	# Get email data from db or cache
+	if ( !exists($quotahash{$skey}) || !exists($quotahash{$skey}{'quota'}) ){	# if this domain/email is not in the cache then search in DB
+		lock($lock);
 		my $dbh = DBI->connect($dsn, $db_user, $db_passwd);
 		my $sql_query = $dbh->prepare($sql_getquota);
 		$sql_query->execute($skey);
-		if($sql_query->rows > 0){
+		if($sql_query->rows > 0){	# if domain/email in database then load it
 			while(@row = $sql_query->fetchrow_array()){
 				$quotahash{$skey} = &share({});
 				$quotahash{$skey}{'quota'} = $row[0];
 				$quotahash{$skey}{'tally'} = $row[1];
-				$quotahash{$skey}{'sum'} = 0;
-				if($row[2]){
+				if($row[2]){		# if has expiration in DB take it or generate new expiration
 					$quotahash{$skey}{'expire'} = $row[2];
 				}else{
-					#$quotahash{$skey}{'expire'} = calcexpire($deltaconf);
-					$quotahash{$skey}{'expire'} = 0;
+					$quotahash{$skey}{'expire'} = calcexpire($deltaconf);
+					#$quotahash{$skey}{'expire'} = 0;
 				}
 				undef @row;
 			}
-			$sql_query->finish();
+			chomp(my $exp = ctime($quotahash{$skey}{'expire'}));
+			logger("Cached: $skey $quotahash{$skey}{'tally'}/$quotahash{$skey}{'quota'} exp=[$exp]");
 			$dbh->disconnect;
 		}else{
-			$sql_query->finish();
 			$dbh->disconnect;
 			return "dunno";
 		}
 	}
-	if($quotahash{$skey}{'expire'} < time() ){
-		lock($lock);
-		$quotahash{$skey}{'sum'} = 0;
+
+	# Reached expiration time, the reset tally/sum and store it
+	if ($quotahash{$skey}{'expire'} < time()){
+		#$quotahash{$skey} = &share({});
 		$quotahash{$skey}{'tally'} = 0;
 		$quotahash{$skey}{'expire'} = calcexpire($deltaconf);
-		my $dbh = DBI->connect($dsn, $db_user, $db_passwd);
-	        my $sql_query = $dbh->prepare($sql_updatequota);
-		$sql_query->execute(0, $quotahash{$skey}{'expire'}, $skey)
-			or logger("Query error: ". $sql_query->errstr);
+		logger("Reset: $skey $quotahash{$skey}{'tally'}/$quotahash{$skey}{'quota'} exp=[$quotahash{$skey}{'expire'}]");
 	}
-	if($quotahash{$skey}{'tally'} + $recipient_count > $quotahash{$skey}{'quota'}){
+
+	# Exeeded quota
+	$result=$quotahash{$skey}{'tally'} + $recipient_count;
+	if ( $result > $quotahash{$skey}{'quota'} ){
+		logger("Reject: $skey $quotahash{$skey}{'tally'}/$quotahash{$skey}{'quota'}");
 		return "471 $deltaconf message quota exceeded"; 
 	}
-	$quotahash{$skey}{'tally'} += $recipient_count;
-	$quotahash{$skey}{'sum'} += $recipient_count;
+	$quotahash{$skey}{'tally'} = $result;
+
 	return "dunno";
 }
 
@@ -287,18 +311,26 @@ sub sigterm_handler {
 	exit(0);
 }
 
+# ####################
+# commit cache to DB
+# ####################
 sub commit_cache {
 	my $dbh = DBI->connect($dsn, $db_user, $db_passwd);
-	my $sql_query = $dbh->prepare($sql_updatequota);
-	#lock($lock); -- lock at upper level
-	while(($k,$v) = each(%quotahash)){
-		$sql_query->execute($quotahash{$k}{'sum'}, $quotahash{$k}{'expire'}, $k)
-			or logger("Query error:".$sql_query->errstr);
-		$quotahash{$k}{'sum'} = 0;
+	if ($dbh) {
+		#lock($lock); -- lock at upper level
+		while(($k,$v) = each(%quotahash)){
+			my $sql_query = $dbh->prepare($sql_updatequota);
+			$sql_query->execute($quotahash{$k}{'tally'}, $quotahash{$k}{'expire'}, $k) or logger("Query error:".$sql_query->errstr);
+			chomp(my $exp = ctime($quotahash{$k}{'expire'}));
+			logger("stored $k: $quotahash{$k}{'tally'}/$quotahash{$k}{'quota'} exp=$exp");
+		}
+		$dbh->disconnect;
 	}
-	$dbh->disconnect;
 }
 
+# ####################
+# clean cache (flush)
+# ####################
 sub flush_cache {
 	lock($lock);
 	foreach $k(keys %quotahash){
@@ -306,16 +338,24 @@ sub flush_cache {
 	}
 }
 
+# ####################
+# show cache
+# ####################
 sub print_cache {
+	lock($lock);
 	foreach $k(keys %quotahash){
-        logger("$k: $quotahash{$k}{'quota'}, $quotahash{$k}{'tally'}");
-    }
+		chomp(my $exp = ctime($quotahash{$k}{'expire'}));
+		logger("$k: $quotahash{$k}{'tally'}/$quotahash{$k}{'quota'} exp=[$exp]");
+	}
 }
 
+# ####################
+# act as a server
+# ####################
 sub daemonize {
 	my ($i,$pid);
 	my $mask = umask 0027;
-	print "sentora-paranoid SMTP Policy Daemon.\n Logging to $LOGFILE\n";
+	print "sentora-paranoid SMTP Policy Daemon.\n Limiting $s_key_type/$deltaconf\n Logging to $LOGFILE\n";
 	#Should i delete this??
 	#$ENV{PATH}="/bin:/usr/bin";
 	#chdir("/");
@@ -337,6 +377,9 @@ sub daemonize {
 	umask $mask;
 }
 
+# ####################
+# return new time limit based on $deltaconf
+# ####################
 sub calcexpire{
         my ($sec,$min,$hour,$mday,$mon,$year,$wday,$yday,$isdst) = localtime(time);
         my ($arg) = @_;
@@ -354,11 +397,14 @@ sub calcexpire{
         return $exp;
 }
 
+# ####################
+# Log activity
+# ####################
 sub logger {
 	my ($arg) = @_;
 	my $time = localtime();
 	chomp($time);
+	flock(LOG, LOCK_EX);
 	print LOG  "$time $arg\n";
+	flock(LOG, LOCK_UN);
 }
-
-

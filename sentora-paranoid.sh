@@ -578,7 +578,7 @@ if [[ "$REVERT" = "false" ]] ; then
 			echo "NOTICE: PHP Function [eval] was disabled, this may cause conflicts whit some php scripts"
 		fi
 		Q1="USE sentora_postfix;"
-		Q2="ALTER TABLE mailbox ADD COLUMN msgquota int(10) unsigned NOT NULL DEFAULT '0';"
+		Q2="ALTER TABLE mailbox ADD COLUMN msgquota int(10) unsigned NOT NULL DEFAULT '30';"	# You can increase here the default emails/hour limit
 		Q3="ALTER TABLE mailbox ADD COLUMN msgtally int(10) unsigned NOT NULL DEFAULT '0';"
 		Q4="ALTER TABLE mailbox ADD COLUMN timestamp int(10) unsigned DEFAULT NULL;"
 		SQL="${Q1}${Q2}${Q3}${Q4}"
@@ -951,8 +951,10 @@ if [[ "$REVERT" = "false" ]] ; then
 			echo "@bypass_spam_checks_maps = (" >> /etc/amavis/conf.d/15-content_filter_mode
 			echo " \%bypass_spam_checks, \@bypass_spam_checks_acl, \$bypass_spam_checks_re);" >> /etc/amavis/conf.d/15-content_filter_mode
 			echo "1;"  >> /etc/amavis/conf.d/15-content_filter_mode
+			sed -i "s@sa_spam_subject_tag = '***SPAM*** '@sa_spam_subject_tag = '[SPAM] '@" /etc/amavis/conf.d/20-debian_defaults
 			sed -i 's@X_HEADER_LINE = "Debian@X_HEADER_LINE = "sentora-paranoid@' /etc/amavis/conf.d/20-debian_defaults
 			sed -i 's@enable_dkim_verification = 1@enable_dkim_verification = 0@' /etc/amavis/conf.d/21-ubuntu_defaults
+			sed -i 's@final_bad_header_destiny = D_PASS@final_bad_header_destiny = D_BOUNCE@' /etc/amavis/conf.d/21-ubuntu_defaults
 			AMAVISC="/etc/amavis/conf.d/50-user"
 			echo "use strict;" > $AMAVISC
 			echo "@local_domains_acl = qw(.);" >> $AMAVISC

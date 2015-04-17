@@ -38,7 +38,7 @@ if [[ "$1" = "clean" ]] ; then
 	exit
 fi
 
-SENTORA_PARANOID_VERSION="1.0.0-dev-snapshot"	# This installer version
+SENTORA_PARANOID_VERSION="1.0.0-150417"	# This installer version
 SENTORA_INSTALLER_VERSION="1.0.0"	# Script version used to install sentora
 SENTORA_CORE_VERSION="1.0.0"		# Sentora core versión
 SENTORA_PRECONF_VERSION="1.0.0"		# Preconf used by sentora script installer
@@ -460,6 +460,19 @@ if [[ "$REVERT" = "false" ]] ; then
 fi
 
 #====================================================================================
+# bc tool used to calculate random FTP ports before firewall is enabled
+if [ -f /usr/bin/bc ] ; then
+	echo "bc tool is already installed, nice!"
+else
+	echo "Installing bc, required to set FTP random ports"
+	$PACKAGE_INSTALLER bc
+fi
+
+#====================================================================================
+#--- Calculate 1000 random FTP passive ports interval
+PP_START=$(echo $RANDOM % 55000 + 1024 | bc)
+PP_END=$PP_START+1000;
+
 #--- Get current sshd port to avoid administrative blocking by new firewall rules
 echo -e "\n-- Obtaining current sshd port"
 SSHD_PORT=$( cat /etc/ssh/sshd_config | grep "Port" | sed -e "s/Port //" )
@@ -475,6 +488,8 @@ if [[ "$REVERT" = "false" ]] ; then
 	sed "s@%%SSHDPORT%%@$SSHD_PORT@" $SENTORA_PARANOID_CONFIG_PATH/iptables/iptables.firewall.orig > $SENTORA_PARANOID_CONFIG_PATH/iptables/iptables.firewall.rules 
 	sed "s@%%SSHDPORT%%@$SSHD_PORT@" $SENTORA_PARANOID_CONFIG_PATH/iptables/ip6tables.firewall.orig > $SENTORA_PARANOID_CONFIG_PATH/iptables/ip6tables.firewall.rules 
 	sed "s@%%SSHDPORT%%@$SSHD_PORT@g" $SENTORA_PARANOID_CONFIG_PATH/fail2ban/jail.local.orig > $SENTORA_PARANOID_CONFIG_PATH/fail2ban/jail.local
+	sed -i "s@%%PP_START%%@$PP_END@" $SENTORA_PARANOID_CONFIG_PATH/iptables/iptables.firewall.rules
+	sed -i "s@%%PP_START%%@$PP_END@" $SENTORA_PARANOID_CONFIG_PATH/iptables/ip6tables.firewall.rules
 fi
 
 #====================================================================================
@@ -578,7 +593,7 @@ if [[ "$REVERT" = "false" ]] ; then
 			echo "NOTICE: PHP Function [eval] was disabled, this may cause conflicts whit some php scripts"
 		fi
 		Q1="USE sentora_postfix;"
-		Q2="ALTER TABLE mailbox ADD COLUMN msgquota int(10) unsigned NOT NULL DEFAULT '30';"	# You can increase here the default emails/hour limit
+		Q2="ALTER TABLE mailbox ADD COLUMN msgquota int(10) unsigned NOT NULL DEFAULT '20';"	# You can increase here the default emails/hour limit
 		Q3="ALTER TABLE mailbox ADD COLUMN msgtally int(10) unsigned NOT NULL DEFAULT '0';"
 		Q4="ALTER TABLE mailbox ADD COLUMN timestamp int(10) unsigned DEFAULT NULL;"
 		SQL="${Q1}${Q2}${Q3}${Q4}"
@@ -758,6 +773,15 @@ if [[ "$REVERT" = "false" ]] ; then
 fi
 
 #====================================================================================
+#--- letsencrypt must/should be used with sentora environment?
+# To be revised and may be included in future versions
+if [[ "$REVERT" = "false" ]] ; then
+	if [[ "$OS" = "Ubuntu" ]]; then
+	 true
+	fi
+fi
+
+#====================================================================================
 #--- postfix
 echo -e "\n-- Postfix security"
 if [[ "$REVERT" = "false" ]] ; then
@@ -786,6 +810,7 @@ if [[ "$REVERT" = "false" ]] ; then
 			echo "bounce_queue_lifetime = 4h" >> $PANEL_PATH/configs/postfix/main.cf
 			echo "NOTICE: postfix mailbox and message limits are set, this may cause conflicts with users expected behaviour"
 			# Limit spammers
+			sed -i "s@smtpd_sender_restrictions =@smtpd_sender_restrictions = reject_unknown_sender_domain@" $PANEL_PATH/configs/postfix/main.cf
 			echo "smtpd_error_sleep_time = 20" >> $PANEL_PATH/configs/postfix/main.cf
 			echo "smtpd_soft_error_limit = 3" >> $PANEL_PATH/configs/postfix/main.cf
 			echo "smtpd_hard_error_limit = 6" >> $PANEL_PATH/configs/postfix/main.cf
@@ -805,7 +830,7 @@ if [[ "$REVERT" = "false" ]] ; then
 		sed -i "s@#tls_random_source@tls_random_source@" $PANEL_PATH/configs/postfix/main.cf
 		sed -i "s@#smtpd_tls_key_file@smtpd_tls_key_file = $SENTORA_PARANOID_CONFIG_PATH/openssl/keys/${FQDN}-nophrase.key\n#@" $PANEL_PATH/configs/postfix/main.cf
 		sed -i "s@#smtpd_tls_cert_file@smtpd_tls_cert_file = $SENTORA_PARANOID_CONFIG_PATH/openssl/certs/${FQDN}.crt\n#@" $PANEL_PATH/configs/postfix/main.cf
-		sed -i "s@#smtpd_tls_CAfile@smtpd_tls_CAfile = $SENTORA_PARANOID_CONFIG_PATH/openssl/certs/root-ca.crt@" $PANEL_PATH/configs/postfix/main.cf
+		sed -i "s@#[[:blank:]]*smtpd_tls_CAfile@smtpd_tls_CAfile = $SENTORA_PARANOID_CONFIG_PATH/openssl/certs/root-ca.crt@" $PANEL_PATH/configs/postfix/main.cf
 		sed -i "s@pickup@smtps     inet	n 		- 		n 		-		 -		smtpd\n -o smtpd_tls_wrappermode=yes -o smtpd_sasl_auth_enable=yes\npickup@" $PANEL_PATH/configs/postfix/master.cf
 		#
 		# Add this into documentation not here
@@ -894,8 +919,8 @@ if [[ "$REVERT" = "false" ]] ; then
 		fi
 		change "" "750" root $ADMIN_GRP /etc/opendkim/gendkimkey
 		change "" "664" opendkim opendkim /etc/default/opendkim
-		change "-R" "660" opendkim opendkim /etc/opendkim/keys/$FQDN
-		change "" "770" opendkim opendkim /etc/opendkim/keys/$FQDN
+		change "-R" "640" opendkim opendkim /etc/opendkim/keys/$FQDN
+		change "" "750" opendkim opendkim /etc/opendkim/keys/$FQDN
 		change "" "660" opendkim $ADMIN_GRP /etc/opendkim/opendkim.conf
 		change "" "660" opendkim $ADMIN_GRP /etc/opendkim/KeyTable
 		change "" "660" opendkim $ADMIN_GRP /etc/opendkim/SigningTable
@@ -999,7 +1024,7 @@ if [[ "$REVERT" = "false" ]] ; then
 				echo "        -o strict_rfc821_envelopes=yes" >> $PANEL_PATH/configs/postfix/master.cf
 				echo "        -o smtpd_milters=inet:localhost:10026" >> $PANEL_PATH/configs/postfix/master.cf
 				echo "        -o receive_override_options=no_header_body_checks,no_unknown_recipient_checks" >> $PANEL_PATH/configs/postfix/master.cf
-				sed -i "s@pickup@pickup	  fifo	n	-	-	60	1	pickup\n\t-o content_filter=\n\t-o receive_override_options=no_header_body_checks\n#@" $PANEL_PATH/configs/postfix/master.cf
+				sed -i "s@pickup@pickup\tfifo\tn\t-\t-\t60\t1\tpickup\n\t-o content_filter=\n\t-o receive_override_options=no_header_body_checks\n#@" $PANEL_PATH/configs/postfix/master.cf
 			fi
 			if ! grep -q "smtpd_milters" $PANEL_PATH/configs/postfix/main.cf ; then
 				sed -i "s@strict_rfc821_envelopes=yes@strict_rfc821_envelopes=yes\n  -o smtpd_milters=inet:localhost:10026#@" $PANEL_PATH/configs/postfix/master.cf
@@ -1043,9 +1068,20 @@ if [[ "$REVERT" = "false" ]] ; then
 		fi
 		# Log more authentication info (the correct place for this is conf.d/10-auth.conf but senotra does not include configs for some reason)
 		if ! grep -q "auth_verbose" $PANEL_PATH/configs/dovecot2/dovecot.conf ; then
-			echo "auth_verbose = yes" >> $PANEL_PATH/configs/dovecot2/dovecot.conf			
-			echo "auth_debug = yes" >> $PANEL_PATH/configs/dovecot2/dovecot.conf			
+			echo "auth_verbose = yes" >> $PANEL_PATH/configs/dovecot2/dovecot.conf
+			echo "auth_debug = yes" >> $PANEL_PATH/configs/dovecot2/dovecot.conf
 		fi
+		# Avoid permissions problems
+		#if ! grep -q "service anvil" $PANEL_PATH/configs/dovecot2/dovecot.conf ; then
+		#	echo "service anvil {" >> $PANEL_PATH/configs/dovecot2/dovecot.conf
+		#	echo " unix_listener anvil_auth_penalty {" >> $PANEL_PATH/configs/dovecot2/dovecot.conf
+		#	echo "  usr = vmail" >> $PANEL_PATH/configs/dovecot2/dovecot.conf
+		#	echo "  group = mail" >> $PANEL_PATH/configs/dovecot2/dovecot.conf
+		#	echo "  mode 0600" >> $PANEL_PATH/configs/dovecot2/dovecot.conf
+		#	echo " }" >> $PANEL_PATH/configs/dovecot2/dovecot.conf
+		#	echo "}" >> $PANEL_PATH/configs/dovecot2/dovecot.conf
+		#	echo " " >> $PANEL_PATH/configs/dovecot2/dovecot.conf
+		#fi
 		# Enable SSL
 		sed -i "s@ssl = no@ssl = yes\nssl_cert = <$SENTORA_PARANOID_CONFIG_PATH/openssl/certs/${FQDN}.crt\nssl_key = <$SENTORA_PARANOID_CONFIG_PATH/openssl/keys/${FQDN}-nophrase.key@" $PANEL_PATH/configs/dovecot2/dovecot.conf
 		# Add examples into documentation not here
@@ -1348,8 +1384,10 @@ if [[ "$REVERT" = "false" ]] ; then
 		else
 			mkdir -vp $SENTORA_PARANOID_BACKUP_PATH/proftpd/sentora
 			cp -v $PANEL_PATH/configs/proftpd/proftpd-mysql.conf $SENTORA_PARANOID_BACKUP_PATH/proftpd/sentora
-			touch /var/sentora/logs/proftpd/auth.log
-			touch /var/sentora/logs/proftpd/sftp.log
+			cp -v /etc/proftpd/tls.conf $SENTORA_PARANOID_BACKUP_PATH/proftpd/sentora
+			touch $PANEL_DATA/logs/proftpd/auth.log
+			touch $PANEL_DATA/logs/proftpd/sftp.log
+			touch $PANEL_DATA/logs/proftpd/tls.log
 		fi
 		# We are not sure if the administrator email exists and if it is necesary to change this email use next command
 		# sed -i "s/root@localhost/$ADMIN_USR@$FQDN/" $SENTORA_PARANOID_CONFIG_PATH/proftpd/proftpd-mysql.conf
@@ -1358,8 +1396,15 @@ if [[ "$REVERT" = "false" ]] ; then
 		sed -i "s/Nice FTP Server/$FQDN FTP Server/" $SENTORA_PARANOID_CONFIG_PATH/proftpd/proftpd-mysql.conf
 		sed -i "s/Nice sFTP Server/$FQDN sFTP Server/" $SENTORA_PARANOID_CONFIG_PATH/proftpd/proftpd-mysql.conf
 		#
+		# Enable Passive Ports
+		sed -i "s/%%PP_START%%/$PP_START/" $SENTORA_PARANOID_CONFIG_PATH/proftpd/proftpd-mysql.conf
+		sed -i "s/%%PP_END%%/$PP_END/" $SENTORA_PARANOID_CONFIG_PATH/proftpd/proftpd-mysql.conf
+		# Enable TLS
+		sed -i "s@%%CERT%%@$SENTORA_PARANOID_CONFIG_PATH/openssl/certs/${FQDN}.crt@" $SENTORA_PARANOID_CONFIG_PATH/proftpd/proftpd-mysql.conf
+		sed -i "s@%%KEY%%@$SENTORA_PARANOID_CONFIG_PATH/openssl/keys/${FQDN}-nophrase.key@" $SENTORA_PARANOID_CONFIG_PATH/proftpd/proftpd-mysql.conf
+		sed -i "s@%%CA_CERT%%@$SENTORA_PARANOID_CONFIG_PATH/openssl/certs/root-ca.pem@" $SENTORA_PARANOID_CONFIG_PATH/proftpd/proftpd-mysql.conf
 		# Enable sftp
-		sed -i "s/%%LOCAL_IP%%/$local_ip/" $SENTORA_PARANOID_CONFIG_PATH/proftpd/proftpd-mysql.conf
+		sed -i "s/%%LOCAL_IP%%/$local_ip/g" $SENTORA_PARANOID_CONFIG_PATH/proftpd/proftpd-mysql.conf
 		PWDFILE="/root/passwords.txt"
 		FTP_PWD=$(grep "ProFTP" $PWDFILE | sed -e "s@MySQL ProFTPd Password\s*:\s@@")
 		sed -i "s/%%PASSWD%%/$FTP_PWD/" $SENTORA_PARANOID_CONFIG_PATH/proftpd/proftpd-mysql.conf
@@ -1375,6 +1420,7 @@ if [[ "$REVERT" = "false" ]] ; then
 		change "-R" "g+w" root $ADMIN_GRP /etc/proftpd/conf.d
 		change "" "g+w" root $ADMIN_GRP /etc/proftpd/*.conf
 		change "" "640" root $ADMIN_GRP $PANEL_DATA/logs/proftpd/*
+		change "" "770" root $ADMIN_GRP $PANEL_DATA/logs/proftpd
 		service proftpd restart
 	fi
 else
@@ -1603,7 +1649,7 @@ if [[ "$REVERT" = "false" ]] ; then
 			touch $PANEL_DATA/logs/roundcube/sessions
 			change "" "660" $ADMIN_USR $HTTP_GROUP $PANEL_DATA/logs/roundcube/sessions
 		fi
-		# Set localip
+		# Prevent autoblock by setting localip
 		sed -i "s@%%LOCAL_IP%%@$local_ip@" $SENTORA_PARANOID_CONFIG_PATH/fail2ban/jail.local
 		cp -v $SENTORA_PARANOID_CONFIG_PATH/fail2ban/jail.local /etc/fail2ban
 		/etc/init.d/fail2ban restart

@@ -108,7 +108,7 @@ save_rules()
 	elif [ -x /sbin/iptables-save ]; then
 		log_action_cont_msg " IPv4"
 		echo " Saving IPv4 rules" 2>> /var/log/iptables.log
-		iptables-save > /etc/iptables/rules.v4 >> /var/log/iptables.log
+		iptables-save > /etc/iptables/rules.v4 2>> /var/log/iptables.log
 		if [ $? -ne 0 ]; then
 			rc=1
 		fi

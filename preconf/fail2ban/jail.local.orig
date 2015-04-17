@@ -125,6 +125,12 @@ filter   = proftpd
 logpath  = /var/sentora/logs/proftpd/auth.log
 maxretry = 5
 
+[paranoid-proftpd]
+enabled  = true
+filter   = paranoid-proftpd
+action   = iptables[name=ProFTPD, port=ftp, protocol=tcp]
+logpath  = /var/sentora/logs/proftpd/auth.log
+maxretry = 3
 
 #
 # Mail server

@@ -1,8 +1,8 @@
-require "fileinto";
+require "fileinto, regex";
 	if exists "X-Spam-Flag" {
 		  if header :contains "X-Spam-Flag" "NO" {
 		  } else {
-			  fileinto "Spam";
+			  fileinto "Junk";
 			  stop;
 		  }
 	}
@@ -12,13 +12,12 @@ require "fileinto";
 		stop;
 	}
 
-require "regex";
-	if  header :regex	["subject"] [".*SPAM.*"]) {
-		fileinto "Spam";
+	if  header :regex	"subject" ".*SPAM.*" {
+		fileinto "Junk";
 		stop;
 	}
 	
-	if  header :regex	["subject"] [".*BULK.*"]) {
-		fileinto "Spam";
+	if  header :regex	"subject" ".*BULK.*" {
+		fileinto "Junk";
 		stop;
 	}

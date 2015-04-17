@@ -28,6 +28,8 @@
 
 # FTP
 -A INPUT -p tcp --dport 21 -j ACCEPT
+# FTP Passive mode
+-A INPUT -p tcp --sport 1024: --dport %%PP_START%%:%%PP_END -m state --state NEW,ESTABLISHED -j ACCEPT
 
 # SFTP
 -A INPUT -p tcp --dport 115 -j ACCEPT

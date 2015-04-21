@@ -38,8 +38,8 @@ if [[ "$1" = "clean" ]] ; then
 	exit
 fi
 
-SENTORA_PARANOID_VERSION="1.0.0-dev-snapshot"	# This installer version
-SENTORA_INSTALLER_VERSION="1.0.0"	# Script version used to install sentora
+SENTORA_PARANOID_VERSION="1.0.1-150422"	# This installer version
+SENTORA_INSTALLER_VERSION="1.0.1"	# Script version used to install sentora
 SENTORA_CORE_VERSION="1.0.0"		# Sentora core versión
 SENTORA_PRECONF_VERSION="1.0.0"		# Preconf used by sentora script installer
 
@@ -161,8 +161,12 @@ fi
 #====================================================================================
 # User is requesting to see services status
 if [[ "$1" = "status" ]] ; then
-	clear
-	check_status
+	if [ -d $PANEL_PATH ] ; then
+		clear
+		check_status
+	else
+		echo -e "$COLOR_RED Execuion failed: you must install sentora first. $COLOR_END"
+	fi
 	exit
 fi
 
@@ -434,6 +438,7 @@ if [[ "$REVERT" = "false" ]] ; then
 	# Get latest sentora-paranoid/preconf
 	while true; do
 		wget -nv -O /tmp/preconf.zip http://sentora-paranoid.open-source.tk/installers/$SENTORA_PARANOID_VERSION/preconf.zip
+		# If web not available and you have a preconf.zip copy for this version, plese put in the /tmp directory and ignore previous HTTP error
 		if [ -f /tmp/preconf.zip ] ; then
 			unzip -oq /tmp/preconf.zip -d /tmp
 			if [ -d /tmp/preconf/preconf ] ; then
@@ -794,9 +799,15 @@ if [[ "$REVERT" = "false" ]] ; then
 			echo "Postfix config files already backed up"
 		else
 			mkdir -vp $SENTORA_PARANOID_BACKUP_PATH/postfix/sentora
+			cp -v /etc/aliases $SENTORA_PARANOID_BACKUP_PATH/postfix/aliases
 			cp -v $PANEL_PATH/configs/postfix/{main,master}.cf $SENTORA_PARANOID_BACKUP_PATH/postfix/sentora
 			cp -v $PANEL_PATH/configs/postfix/mynetworks $SENTORA_PARANOID_BACKUP_PATH/postfix/sentora
 		fi
+		# Add default mail related aliases
+		echo "MAILER-DAEMON: postmaster" >> /etc/aliases
+		echo "abuse: postmaster" >> /etc/aliases
+		echo "spam: postmaster" >> /etc/aliases
+		echo "NOTICE: you must set the root alias in /etc/aliases"
 		# Reject mails from invalid/unknown fqdn/hostnames
 		sed -i "s@reject_unknown_recipient_domain@\treject_non_fqdn_helo_hostname,\n\treject_invalid_helo_hostname,\n\treject_unknown_helo_hostname,\n\treject_unknown_recipient_domain@" $PANEL_PATH/configs/postfix/main.cf
 		echo "NOTICE: postfix will reject mails from invalid/unknown fqdn/hostnames , this may reject some legitimate mails"
@@ -862,6 +873,7 @@ if [[ "$REVERT" = "false" ]] ; then
 else
 	if [[ "$OS" = "Ubuntu" ]]; then
 		if [ -d $SENTORA_PARANOID_BACKUP_PATH/postfix/sentora ] ; then
+			cp -v $SENTORA_PARANOID_BACKUP_PATH/postfix/aliases /etc/aliases
 			cp -v $SENTORA_PARANOID_BACKUP_PATH/postfix/sentora/{main,master}.cf  $PANEL_PATH/configs/postfix
 			cp -v $SENTORA_PARANOID_BACKUP_PATH/postfix/sentora/mynetworks $PANEL_PATH/configs/postfix
 		else
@@ -958,6 +970,7 @@ echo -e "\n-- clamav"
 if [[ "$REVERT" = "false" ]] ; then
 	if [[ "$INSTALL_MTA_CF" = "true" ]]; then
 		if [[ "$OS" = "Ubuntu" ]]; then
+			echo "clamav: postmaster" >> /etc/aliases
 			adduser clamav amavis
 			# Both services are restarted in amavis-new section
 			#service clamav-daemon restart
@@ -1275,6 +1288,8 @@ if [[ "$REVERT" = "false" ]] ; then
 			ln -svf ../conf-available/other-vhosts-log.conf /etc/apache2/conf-enabled/other-vhosts-log.conf
 			cp -v /etc/apache2/conf-available/security.conf $SENTORA_PARANOID_BACKUP_PATH/apache2/conf-available
 		fi
+		echo "$HTTP_USER: root" >> /etc/aliases
+		echo "NOTICE: All mail sended or bounced fot $HTTP_USER will be sended to the root alias"
 		# remove security config override in sentora/httpd.conf, the rigth place is security.conf
 		sed -i "s@ServerTokens Prod@#ServerTokens Prod@" $PANEL_PATH/configs/apache/httpd.conf
 		# Add host(ing) signature
@@ -1499,7 +1514,7 @@ fi
 #--- sentora-paranoid security modules
 echo -e "\n-- sentora-paranoid security modules"
 if [[ "$REVERT" = "false" ]] ; then
-	if [[ "$INSTALL_ARMOR" = "true" ]]; then
+	if [[ "$INSTALL_MODULE" = "true" ]]; then
 		if [[ "$OS" = "Ubuntu" ]]; then
 			mkdir -vp $PANEL_PATH/panel/modules/paranoid_admin
 			cp -vr $SENTORA_PARANOID_MODULE_PATH/paranoid_admin $PANEL_PATH/panel/modules/paranoid_admin

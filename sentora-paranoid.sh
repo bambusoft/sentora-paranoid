@@ -38,7 +38,7 @@ if [[ "$1" = "clean" ]] ; then
 	exit
 fi
 
-SENTORA_PARANOID_VERSION="1.0.0-150417"	# This installer version
+SENTORA_PARANOID_VERSION="1.0.0-dev-snapshot"	# This installer version
 SENTORA_INSTALLER_VERSION="1.0.0"	# Script version used to install sentora
 SENTORA_CORE_VERSION="1.0.0"		# Sentora core versión
 SENTORA_PRECONF_VERSION="1.0.0"		# Preconf used by sentora script installer
@@ -471,7 +471,8 @@ fi
 #====================================================================================
 #--- Calculate 1000 random FTP passive ports interval
 PP_START=$(echo $RANDOM % 55000 + 1024 | bc)
-PP_END=$PP_START+1000;
+PP_END=$(($PP_START+1000));
+echo -e "\n-- Calculated 1000 random FTP passive ports: $PP_START - $PP_END"
 
 #--- Get current sshd port to avoid administrative blocking by new firewall rules
 echo -e "\n-- Obtaining current sshd port"
@@ -488,8 +489,10 @@ if [[ "$REVERT" = "false" ]] ; then
 	sed "s@%%SSHDPORT%%@$SSHD_PORT@" $SENTORA_PARANOID_CONFIG_PATH/iptables/iptables.firewall.orig > $SENTORA_PARANOID_CONFIG_PATH/iptables/iptables.firewall.rules 
 	sed "s@%%SSHDPORT%%@$SSHD_PORT@" $SENTORA_PARANOID_CONFIG_PATH/iptables/ip6tables.firewall.orig > $SENTORA_PARANOID_CONFIG_PATH/iptables/ip6tables.firewall.rules 
 	sed "s@%%SSHDPORT%%@$SSHD_PORT@g" $SENTORA_PARANOID_CONFIG_PATH/fail2ban/jail.local.orig > $SENTORA_PARANOID_CONFIG_PATH/fail2ban/jail.local
-	sed -i "s@%%PP_START%%@$PP_END@" $SENTORA_PARANOID_CONFIG_PATH/iptables/iptables.firewall.rules
-	sed -i "s@%%PP_START%%@$PP_END@" $SENTORA_PARANOID_CONFIG_PATH/iptables/ip6tables.firewall.rules
+	sed -i "s@%%PP_START%%@$PP_START@" $SENTORA_PARANOID_CONFIG_PATH/iptables/iptables.firewall.rules
+	sed -i "s@%%PP_END%%@$PP_END@" $SENTORA_PARANOID_CONFIG_PATH/iptables/iptables.firewall.rules
+	sed -i "s@%%PP_START%%@$PP_START@" $SENTORA_PARANOID_CONFIG_PATH/iptables/ip6tables.firewall.rules
+	sed -i "s@%%PP_END%%@$PP_END@" $SENTORA_PARANOID_CONFIG_PATH/iptables/ip6tables.firewall.rules
 fi
 
 #====================================================================================

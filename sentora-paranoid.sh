@@ -38,8 +38,8 @@ if [[ "$1" = "clean" ]] ; then
 	exit
 fi
 
-SENTORA_PARANOID_VERSION="1.0.1-150422"	# This installer version
-SENTORA_INSTALLER_VERSION="1.0.1"	# Script version used to install sentora
+SENTORA_PARANOID_VERSION="1.0.2-dev-snapshot"	# This installer version
+SENTORA_INSTALLER_VERSION="1.0.2"	# Script version used to install sentora
 SENTORA_CORE_VERSION="1.0.0"		# Sentora core versión
 SENTORA_PRECONF_VERSION="1.0.0"		# Preconf used by sentora script installer
 

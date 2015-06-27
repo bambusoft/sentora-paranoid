@@ -1797,8 +1797,8 @@ echo ""
 echo "#########################################################"
 if [[ "$REVERT" = "false" ]] ; then
 	if [ -f /root/passwords.txt ] ; then
-		echo "MySQL Paranoid Password : $PP" >> /root/passwords.txt
-		echo "OpenSSL CAroot Password : $SSL_PASS" >> /root/passwords.txt
+		echo "MySQL Paranoid Password  : $PP" >> /root/passwords.txt
+		echo "OpenSSL CAroot Password  : $SSL_PASS" >> /root/passwords.txt
 	fi
 	#--- Advise the admin that Sentora is now installed and accessible.
 	echo " Congratulations sentora-paranoid has now been installed "

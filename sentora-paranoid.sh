@@ -143,6 +143,24 @@ ask_user_yn() {
 	done	
 }
 
+# Function that can be called so users have the choice
+ask_user_continue() {
+	END_SCRIPT=""
+	while true; do
+		read -e -p "`echo -e "$COLOR_YLW WARNING: $COLOR_END Step FAIL. Continuing could break your system.
+Would you like to continue anywas? $COLOR_RED (NOT RECOMENDED) $COLOR_END  (y/N): "`" -i "N" END_SCRIPT
+		case $END_SCRIPT in
+			[Yy]* ) echo -e "$COLOR_YLW WARNING: $COLOR_END Continuing even though it could potentially break your system. Press Ctrl+C to exit now (If you changed your mind)"
+					sleep 3
+					break
+					;;
+			[Nn]* ) exit 1;
+					break
+					;;
+		esac
+	done
+}
+
 #====================================================================================
 #--- Display the 'welcome' splash/user warning info..
 clear

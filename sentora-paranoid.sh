@@ -38,8 +38,8 @@ if [[ "$1" = "clean" ]] ; then
 	exit
 fi
 
-SENTORA_PARANOID_VERSION="1.0.1-150422"	# This installer version
-SENTORA_INSTALLER_VERSION="1.0.1"	# Script version used to install sentora
+SENTORA_PARANOID_VERSION="1.0.2-dev-snapshot"	# This installer version
+SENTORA_INSTALLER_VERSION="1.0.2"	# Script version used to install sentora
 SENTORA_CORE_VERSION="1.0.0"		# Sentora core versión
 SENTORA_PRECONF_VERSION="1.0.0"		# Preconf used by sentora script installer
 
@@ -862,7 +862,7 @@ if [[ "$REVERT" = "false" ]] ; then
 		sed -i "s@#tls_random_source@tls_random_source@" $PANEL_PATH/configs/postfix/main.cf
 		sed -i "s@#smtpd_tls_key_file@smtpd_tls_key_file = $SENTORA_PARANOID_CONFIG_PATH/openssl/keys/${FQDN}-nophrase.key\n#@" $PANEL_PATH/configs/postfix/main.cf
 		sed -i "s@#smtpd_tls_cert_file@smtpd_tls_cert_file = $SENTORA_PARANOID_CONFIG_PATH/openssl/certs/${FQDN}.crt\n#@" $PANEL_PATH/configs/postfix/main.cf
-		sed -i "s@#[[:blank:]]*smtpd_tls_CAfile@smtpd_tls_CAfile = $SENTORA_PARANOID_CONFIG_PATH/openssl/certs/root-ca.crt@" $PANEL_PATH/configs/postfix/main.cf
+		sed -i "s@#[[:blank:]]*smtpd_tls_CAfile@smtpd_tls_CAfile = $SENTORA_PARANOID_CONFIG_PATH/openssl/certs/root-ca.crt\n#@" $PANEL_PATH/configs/postfix/main.cf
 		sed -i "s@pickup@smtps     inet	n 		- 		n 		-		 -		smtpd\n -o smtpd_tls_wrappermode=yes -o smtpd_sasl_auth_enable=yes\npickup@" $PANEL_PATH/configs/postfix/master.cf
 		#
 		# Add this into documentation not here
@@ -1010,10 +1010,10 @@ if [[ "$REVERT" = "false" ]] ; then
 			echo "@bypass_spam_checks_maps = (" >> /etc/amavis/conf.d/15-content_filter_mode
 			echo " \%bypass_spam_checks, \@bypass_spam_checks_acl, \$bypass_spam_checks_re);" >> /etc/amavis/conf.d/15-content_filter_mode
 			echo "1;"  >> /etc/amavis/conf.d/15-content_filter_mode
-			sed -i "s@sa_spam_subject_tag = '***SPAM*** '@sa_spam_subject_tag = '[SPAM] '@" /etc/amavis/conf.d/20-debian_defaults
+			sed -i "s@sa_spam_subject_tag = '\*\*\*SPAM\*\*\* '@sa_spam_subject_tag = '\[SPAM\] '@" /etc/amavis/conf.d/20-debian_defaults
 			sed -i 's@X_HEADER_LINE = "Debian@X_HEADER_LINE = "sentora-paranoid@' /etc/amavis/conf.d/20-debian_defaults
 			sed -i 's@enable_dkim_verification = 1@enable_dkim_verification = 0@' /etc/amavis/conf.d/21-ubuntu_defaults
-			sed -i 's@final_bad_header_destiny = D_PASS@final_bad_header_destiny = D_BOUNCE@' /etc/amavis/conf.d/21-ubuntu_defaults
+			#sed -i 's@final_bad_header_destiny = D_PASS@final_bad_header_destiny = D_BOUNCE@' /etc/amavis/conf.d/21-ubuntu_defaults
 			AMAVISC="/etc/amavis/conf.d/50-user"
 			echo "use strict;" > $AMAVISC
 			echo "@local_domains_acl = qw(.);" >> $AMAVISC
@@ -1255,6 +1255,7 @@ if [[ "$REVERT" = "false" ]] ; then
 		# File permissions
 		#change "" "664" root $ADMIN_GRP $PANEL_DATA/logs/roundcube/*
 		change "" "775" root $ADMIN_GRP $PANEL_DATA/logs/roundcube
+		change "" "666" root $ADMIN_GRP $PANEL_DATA/logs/roundcube/*
 	fi
 else
 	if [[ "$OS" = "Ubuntu" ]]; then
@@ -1520,7 +1521,8 @@ fi
 echo -e "\n-- Cron / atd security"
 if [[ "$REVERT" = "false" ]] ; then
 	if [[ "$OS" = "Ubuntu" ]]; then
-		true
+		change "" "1730" root crontab /var/spool/cron/crontabs
+		change "" "600" $HTTP_USER crontab /var/spool/cron/crontabs/$HTTP_USER
 	fi
 else
 	if [[ "$OS" = "Ubuntu" ]]; then
@@ -1682,8 +1684,8 @@ if [[ "$REVERT" = "false" ]] ; then
 			change "" "750" $ADMIN_USR $HTTP_GROUP $PANEL_DATA/logs/domains/_default
 			ln -s  /var/log/apache2/other_vhosts_error.log $PANEL_DATA/logs/domains/_default/error.log
 			mkdir -vp $PANEL_DATA/logs/roundcube
-			touch $PANEL_DATA/logs/roundcube/sessions
-			change "" "660" $ADMIN_USR $HTTP_GROUP $PANEL_DATA/logs/roundcube/sessions
+			touch $PANEL_DATA/logs/roundcube/session
+			change "" "660" $ADMIN_USR $HTTP_GROUP $PANEL_DATA/logs/roundcube/session
 		fi
 		# Prevent autoblock by setting localip
 		sed -i "s@%%LOCAL_IP%%@$local_ip@" $SENTORA_PARANOID_CONFIG_PATH/fail2ban/jail.local

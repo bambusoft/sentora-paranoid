@@ -148,7 +148,7 @@ ask_user_continue() {
 	END_SCRIPT=""
 	while true; do
 		read -e -p "`echo -e "$COLOR_YLW WARNING: $COLOR_END Step FAIL. Continuing could break your system.
-Would you like to continue anywas? $COLOR_RED (NOT RECOMENDED) $COLOR_END  (y/N): "`" -i "N" END_SCRIPT
+Would you like to continue anyway? $COLOR_RED (NOT RECOMENDED) $COLOR_END  (y/N): "`" -i "N" END_SCRIPT
 		case $END_SCRIPT in
 			[Yy]* ) echo -e "$COLOR_YLW WARNING: $COLOR_END Continuing even though it could potentially break your system. Press Ctrl+C to exit now (If you changed your mind)"
 					sleep 3
@@ -185,7 +185,8 @@ if [[ "$1" = "status" ]] ; then
 	else
 		echo -e "$COLOR_RED Execution failed: you must install sentora first. $COLOR_END"
 	fi
-	ask_user_continue
+	# Sistem shows status or error and exit
+	exit
 fi
 
 #====================================================================================
@@ -288,7 +289,7 @@ if [[ "$OS" = "Ubuntu" ]]; then
 			echo -e "$COLOR_RED Execution failed: fail2ban is preinstalled on this system. $COLOR_END"
 			echo "It appears that a failure log scanner is already installed on your server;"
 			echo " This installer is designed to install and configure sentora-paranoid on a clean OS installation with Sentora installed only!"
-			echo -e "\nPlease re-install your OS and sentora $SENTORA_CORE_VERSION before attempting to install senora-paranoid using this script."
+			echo -e "\nPlease re-install your OS and sentora $SENTORA_CORE_VERSION before attempting to install sentora-paranoid using this script."
 			ask_user_continue
 		fi
 	fi

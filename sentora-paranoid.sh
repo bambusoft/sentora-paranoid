@@ -171,7 +171,7 @@ echo "#########################################################################"
 #====================================================================================
 # Check if the user is 'root' before allowing any modification
 if [ $UID -ne 0 ]; then
-	echo -e "$COLOR_RED Execuion failed: you must be logged in as 'root' to proceed. $COLOR_END"
+	echo -e "$COLOR_RED Execution failed: you must be logged in as 'root' to proceed. $COLOR_END"
 	echo "Use command 'sudo -i', then enter root password and then try again."
 	ask_user_continue
 fi
@@ -183,7 +183,7 @@ if [[ "$1" = "status" ]] ; then
 		clear
 		check_status
 	else
-		echo -e "$COLOR_RED Execuion failed: you must install sentora first. $COLOR_END"
+		echo -e "$COLOR_RED Execution failed: you must install sentora first. $COLOR_END"
 	fi
 	ask_user_continue
 fi
@@ -262,7 +262,7 @@ if [[ "$OS" = "Ubuntu" ]]; then
 	if [ -e /usr/sbin/ufw ] ; then
 	 UFWstatus=$(ufw status | sed -e "s/Status: //")
 	 if [[ "$UFWstatus" != "inactive" ]] ; then
-		echo -e "$COLOR_RED Execuion failed: you must disable UncomplicatedFirewall (ufw) to proceed. $COLOR_END"
+		echo -e "$COLOR_RED Execution failed: you must disable UncomplicatedFirewall (ufw) to proceed. $COLOR_END"
 		ask_user_continue
 	 fi
 	fi
@@ -270,7 +270,7 @@ if [[ "$OS" = "Ubuntu" ]]; then
 	if [ -e /sbin/iptables ] ; then
 	 iptables_version=$(iptables --version | sed -e "s/iptables //")
 	 if [ -z "$iptables_version" ] ; then
-		echo -e "$COLOR_RED Execuion failed: iptables is not preinstalled/running on this system. $COLOR_END"
+		echo -e "$COLOR_RED Execution failed: iptables is not preinstalled/running on this system. $COLOR_END"
 		ask_user_continue
 	 fi
 	fi
@@ -278,14 +278,14 @@ if [[ "$OS" = "Ubuntu" ]]; then
 	if [ -e /sbin/ip6tables ] ; then
 	 ip6tables_version=$(ip6tables --version | sed -e "s/ip6tables //")
 	 if [ -z "$ip6tables_version" ] ; then
-		echo -e "$COLOR_RED Execuion failed: ip6tables is not preinstalled/running on this system. $COLOR_END"
+		echo -e "$COLOR_RED Execution failed: ip6tables is not preinstalled/running on this system. $COLOR_END"
 		ask_user_continue
 	 fi
 	fi
 	# fail2ban must not be preinstalled
 	if [[ "$REVERT" = "false" ]] ; then
 		if [ -e /etc/init.d/fail2ban ] ; then
-			echo -e "$COLOR_RED Execuion failed: fail2ban is preinstalled on this system. $COLOR_END"
+			echo -e "$COLOR_RED Execution failed: fail2ban is preinstalled on this system. $COLOR_END"
 			echo "It appears that a failure log scanner is already installed on your server;"
 			echo " This installer is designed to install and configure sentora-paranoid on a clean OS installation with Sentora installed only!"
 			echo -e "\nPlease re-install your OS and sentora $SENTORA_CORE_VERSION before attempting to install senora-paranoid using this script."
@@ -326,7 +326,7 @@ if [[ "$REVERT" = "false" ]] ; then
 	else
 		EXIST=$(grep "$ADMIN_USR:" /etc/passwd)
 		if [ -z "$EXIST" ] ; then
-			echo -e "$COLOR_RED Execuion failed: administrative user does not exist. $COLOR_END"
+			echo -e "$COLOR_RED Execution failed: administrative user does not exist. $COLOR_END"
 			ask_user_continue
 		fi
 	fi
@@ -336,7 +336,7 @@ if [[ "$REVERT" = "false" ]] ; then
 	else
 		EXIST=$(grep "$ADMIN_GRP:" /etc/group)
 		if [ -z "$EXIST" ] ; then
-			echo -e "$COLOR_RED Execuion failed: administrative group does not exist. $COLOR_END"
+			echo -e "$COLOR_RED Execution failed: administrative group does not exist. $COLOR_END"
 			ask_user_continue
 		fi
 	fi
@@ -471,7 +471,7 @@ if [[ "$REVERT" = "false" ]] ; then
 			rm -rf /tmp/preconf.zip /tmp/preconf
 			break;
 		else
-			echo -e "$COLOR_RED Execuion failed: Cannot get latest sentora-paranoid/preconf. $COLOR_END"
+			echo -e "$COLOR_RED Execution failed: Cannot get latest sentora-paranoid/preconf. $COLOR_END"
 			echo "If you quit now, you can run again the installer later."
 			read -e -p "Press r to retry or q to quit the installer? " resp
 			case $resp in

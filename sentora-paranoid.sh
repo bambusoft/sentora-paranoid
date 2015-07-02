@@ -38,8 +38,8 @@ if [[ "$1" = "clean" ]] ; then
 	exit
 fi
 
-SENTORA_PARANOID_VERSION="1.0.1-150422"	# This installer version
-SENTORA_INSTALLER_VERSION="1.0.1"	# Script version used to install sentora
+SENTORA_PARANOID_VERSION="1.0.2-dev-snapshot"	# This installer version
+SENTORA_INSTALLER_VERSION="1.0.2"	# Script version used to install sentora
 SENTORA_CORE_VERSION="1.0.0"		# Sentora core versión
 SENTORA_PRECONF_VERSION="1.0.0"		# Preconf used by sentora script installer
 
@@ -143,6 +143,36 @@ ask_user_yn() {
 	done	
 }
 
+# Function that can be called so users have the choice
+ask_user_continue() {
+	END_SCRIPT=""
+	while true; do
+		read -e -p "`echo -e "$COLOR_YLW WARNING: $COLOR_END Step FAIL. Continuing could break your system.
+Would you like to continue anyway? $COLOR_RED (NOT RECOMENDED) $COLOR_END  (y/N): "`" -i "N" END_SCRIPT
+		case $END_SCRIPT in
+			[Yy]* ) echo -e "$COLOR_YLW WARNING: $COLOR_END Continuing even though it could potentially break your system. Press Ctrl+C to exit now (If you changed your mind)"
+					sleep 3
+					break
+					;;
+			[Nn]* ) exit 1;
+					break
+					;;
+		esac
+	done
+}
+
+validate_replacement() {
+	# $1 string to validate  $2 file
+	if [ -f $2 ]; then
+		found=$(grep "$1" $2)
+		if [ -n "$found" ]; then
+			echo "ERROR: <$1> was not replaced correctly in file $2"
+		fi
+	else
+		echo "WARNING: <$1> was not validated correctly: file $2 does not exist"
+	fi
+}
+
 #====================================================================================
 #--- Display the 'welcome' splash/user warning info..
 clear
@@ -153,9 +183,9 @@ echo "#########################################################################"
 #====================================================================================
 # Check if the user is 'root' before allowing any modification
 if [ $UID -ne 0 ]; then
-	echo -e "$COLOR_RED Execuion failed: you must be logged in as 'root' to proceed. $COLOR_END"
+	echo -e "$COLOR_RED Execution failed: you must be logged in as 'root' to proceed. $COLOR_END"
 	echo "Use command 'sudo -i', then enter root password and then try again."
-	exit 1
+	ask_user_continue
 fi
 
 #====================================================================================
@@ -165,8 +195,9 @@ if [[ "$1" = "status" ]] ; then
 		clear
 		check_status
 	else
-		echo -e "$COLOR_RED Execuion failed: you must install sentora first. $COLOR_END"
+		echo -e "$COLOR_RED Execution failed: you must install sentora first. $COLOR_END"
 	fi
+	# Sistem shows status or error and exit
 	exit
 fi
 
@@ -211,7 +242,7 @@ if [[ "$OS" = "CentOs" && ("$VER" = "6" || "$VER" = "7" ) ||
 	fi
 else
     echo -e "$COLOR_RED Sorry, this OS is not supported by sentora-paranoid. $COLOR_END\n" 
-    exit 1
+    ask_user_continue
 fi
 
 #====================================================================================
@@ -244,34 +275,34 @@ if [[ "$OS" = "Ubuntu" ]]; then
 	if [ -e /usr/sbin/ufw ] ; then
 	 UFWstatus=$(ufw status | sed -e "s/Status: //")
 	 if [[ "$UFWstatus" != "inactive" ]] ; then
-		echo -e "$COLOR_RED Execuion failed: you must disable UncomplicatedFirewall (ufw) to proceed. $COLOR_END"
-		exit 1
+		echo -e "$COLOR_RED Execution failed: you must disable UncomplicatedFirewall (ufw) to proceed. $COLOR_END"
+		ask_user_continue
 	 fi
 	fi
 	# iptables ipv4 must be installed by default in Ubuntu 14.04
 	if [ -e /sbin/iptables ] ; then
 	 iptables_version=$(iptables --version | sed -e "s/iptables //")
 	 if [ -z "$iptables_version" ] ; then
-		echo -e "$COLOR_RED Execuion failed: iptables is not preinstalled/running on this system. $COLOR_END"
-		exit 1
+		echo -e "$COLOR_RED Execution failed: iptables is not preinstalled/running on this system. $COLOR_END"
+		ask_user_continue
 	 fi
 	fi
 	# iptables ipv6 must be installed by default in Ubuntu 14.04
 	if [ -e /sbin/ip6tables ] ; then
 	 ip6tables_version=$(ip6tables --version | sed -e "s/ip6tables //")
 	 if [ -z "$ip6tables_version" ] ; then
-		echo -e "$COLOR_RED Execuion failed: ip6tables is not preinstalled/running on this system. $COLOR_END"
-		exit 1
+		echo -e "$COLOR_RED Execution failed: ip6tables is not preinstalled/running on this system. $COLOR_END"
+		ask_user_continue
 	 fi
 	fi
 	# fail2ban must not be preinstalled
 	if [[ "$REVERT" = "false" ]] ; then
 		if [ -e /etc/init.d/fail2ban ] ; then
-			echo -e "$COLOR_RED Execuion failed: fail2ban is preinstalled on this system. $COLOR_END"
+			echo -e "$COLOR_RED Execution failed: fail2ban is preinstalled on this system. $COLOR_END"
 			echo "It appears that a failure log scanner is already installed on your server;"
 			echo " This installer is designed to install and configure sentora-paranoid on a clean OS installation with Sentora installed only!"
-			echo -e "\nPlease re-install your OS and sentora $SENTORA_CORE_VERSION before attempting to install senora-paranoid using this script."
-			exit 1
+			echo -e "\nPlease re-install your OS and sentora $SENTORA_CORE_VERSION before attempting to install sentora-paranoid using this script."
+			ask_user_continue
 		fi
 	fi
 	echo -e "Ok\n"
@@ -308,8 +339,8 @@ if [[ "$REVERT" = "false" ]] ; then
 	else
 		EXIST=$(grep "$ADMIN_USR:" /etc/passwd)
 		if [ -z "$EXIST" ] ; then
-			echo -e "$COLOR_RED Execuion failed: administrative user does not exist. $COLOR_END"
-			exit 1
+			echo -e "$COLOR_RED Execution failed: administrative user does not exist. $COLOR_END"
+			ask_user_continue
 		fi
 	fi
 	read -e -p "Please enter administrative group name: " -i "$ADMIN_GRP" ADMIN_GRP
@@ -318,8 +349,8 @@ if [[ "$REVERT" = "false" ]] ; then
 	else
 		EXIST=$(grep "$ADMIN_GRP:" /etc/group)
 		if [ -z "$EXIST" ] ; then
-			echo -e "$COLOR_RED Execuion failed: administrative group does not exist. $COLOR_END"
-			exit 1
+			echo -e "$COLOR_RED Execution failed: administrative group does not exist. $COLOR_END"
+			ask_user_continue
 		fi
 	fi
 	echo -e "Using:$COLOR_GRN $ADMIN_USR : $ADMIN_GRP $COLOR_END as the administrative username:groupame"
@@ -384,7 +415,7 @@ clear
 logfile=sentora-paranoid-$$.log
 FQDN=$(grep "mydomain =" $PANEL_PATH/configs/postfix/main.cf | sed "s@mydomain = @@")
 #local_ip=$(ifconfig eth0 | sed -En 's|.*inet [^0-9]*(([0-9]*\.){3}[0-9]*).*$|\1|p')
-local_ip=$(ip addr show | awk '$1 == "inet" && $3 == "brd" { sub (/\/.*/,""); print $2 }')
+local_ip=$(ip addr show | awk '$1 == "inet" && $3 == "brd" { sub (/\/.*/,""); print $2 }' | head -n 1)
 
 touch $logfile
 exec > >(tee $logfile)
@@ -453,7 +484,7 @@ if [[ "$REVERT" = "false" ]] ; then
 			rm -rf /tmp/preconf.zip /tmp/preconf
 			break;
 		else
-			echo -e "$COLOR_RED Execuion failed: Cannot get latest sentora-paranoid/preconf. $COLOR_END"
+			echo -e "$COLOR_RED Execution failed: Cannot get latest sentora-paranoid/preconf. $COLOR_END"
 			echo "If you quit now, you can run again the installer later."
 			read -e -p "Press r to retry or q to quit the installer? " resp
 			case $resp in
@@ -491,7 +522,7 @@ if ! [[ $SSHD_PORT =~ $re ]] ; then
 fi
 echo "SSHD Port: $SSHD_PORT"
 if [[ "$REVERT" = "false" ]] ; then
-	sed "s@%%SSHDPORT%%@$SSHD_PORT@" $SENTORA_PARANOID_CONFIG_PATH/iptables/iptables.firewall.orig > $SENTORA_PARANOID_CONFIG_PATH/iptables/iptables.firewall.rules 
+	sed "s@%%SSHDPORT%%@$SSHD_PORT@" $SENTORA_PARANOID_CONFIG_PATH/iptables/iptables.firewall.orig > $SENTORA_PARANOID_CONFIG_PATH/iptables/iptables.firewall.rules
 	sed "s@%%SSHDPORT%%@$SSHD_PORT@" $SENTORA_PARANOID_CONFIG_PATH/iptables/ip6tables.firewall.orig > $SENTORA_PARANOID_CONFIG_PATH/iptables/ip6tables.firewall.rules 
 	sed "s@%%SSHDPORT%%@$SSHD_PORT@g" $SENTORA_PARANOID_CONFIG_PATH/fail2ban/jail.local.orig > $SENTORA_PARANOID_CONFIG_PATH/fail2ban/jail.local
 	sed -i "s@%%PP_START%%@$PP_START@" $SENTORA_PARANOID_CONFIG_PATH/iptables/iptables.firewall.rules
@@ -844,7 +875,7 @@ if [[ "$REVERT" = "false" ]] ; then
 		sed -i "s@#tls_random_source@tls_random_source@" $PANEL_PATH/configs/postfix/main.cf
 		sed -i "s@#smtpd_tls_key_file@smtpd_tls_key_file = $SENTORA_PARANOID_CONFIG_PATH/openssl/keys/${FQDN}-nophrase.key\n#@" $PANEL_PATH/configs/postfix/main.cf
 		sed -i "s@#smtpd_tls_cert_file@smtpd_tls_cert_file = $SENTORA_PARANOID_CONFIG_PATH/openssl/certs/${FQDN}.crt\n#@" $PANEL_PATH/configs/postfix/main.cf
-		sed -i "s@#[[:blank:]]*smtpd_tls_CAfile@smtpd_tls_CAfile = $SENTORA_PARANOID_CONFIG_PATH/openssl/certs/root-ca.crt@" $PANEL_PATH/configs/postfix/main.cf
+		sed -i "s@#[[:blank:]]*smtpd_tls_CAfile@smtpd_tls_CAfile = $SENTORA_PARANOID_CONFIG_PATH/openssl/certs/root-ca.crt\n#@" $PANEL_PATH/configs/postfix/main.cf
 		sed -i "s@pickup@smtps     inet	n 		- 		n 		-		 -		smtpd\n -o smtpd_tls_wrappermode=yes -o smtpd_sasl_auth_enable=yes\npickup@" $PANEL_PATH/configs/postfix/master.cf
 		#
 		# Add this into documentation not here
@@ -992,10 +1023,10 @@ if [[ "$REVERT" = "false" ]] ; then
 			echo "@bypass_spam_checks_maps = (" >> /etc/amavis/conf.d/15-content_filter_mode
 			echo " \%bypass_spam_checks, \@bypass_spam_checks_acl, \$bypass_spam_checks_re);" >> /etc/amavis/conf.d/15-content_filter_mode
 			echo "1;"  >> /etc/amavis/conf.d/15-content_filter_mode
-			sed -i "s@sa_spam_subject_tag = '***SPAM*** '@sa_spam_subject_tag = '[SPAM] '@" /etc/amavis/conf.d/20-debian_defaults
+			sed -i "s@sa_spam_subject_tag = '\*\*\*SPAM\*\*\* '@sa_spam_subject_tag = '\[SPAM\] '@" /etc/amavis/conf.d/20-debian_defaults
 			sed -i 's@X_HEADER_LINE = "Debian@X_HEADER_LINE = "sentora-paranoid@' /etc/amavis/conf.d/20-debian_defaults
 			sed -i 's@enable_dkim_verification = 1@enable_dkim_verification = 0@' /etc/amavis/conf.d/21-ubuntu_defaults
-			sed -i 's@final_bad_header_destiny = D_PASS@final_bad_header_destiny = D_BOUNCE@' /etc/amavis/conf.d/21-ubuntu_defaults
+			#sed -i 's@final_bad_header_destiny = D_PASS@final_bad_header_destiny = D_BOUNCE@' /etc/amavis/conf.d/21-ubuntu_defaults
 			AMAVISC="/etc/amavis/conf.d/50-user"
 			echo "use strict;" > $AMAVISC
 			echo "@local_domains_acl = qw(.);" >> $AMAVISC
@@ -1235,8 +1266,9 @@ if [[ "$REVERT" = "false" ]] ; then
 			echo "\$config['enable_installer'] = false;" >> $PANEL_PATH/configs/roundcube/roundcube_config.inc.php
 		fi
 		# File permissions
-		#change "" "664" root $ADMIN_GRP $PANEL_DATA/logs/roundcube/*
+		touch $PANEL_DATA/logs/roundcube/sessions
 		change "" "775" root $ADMIN_GRP $PANEL_DATA/logs/roundcube
+		change "" "660" $ADMIN_USR $HTTP_GROUP $PANEL_DATA/logs/roundcube/sessions
 	fi
 else
 	if [[ "$OS" = "Ubuntu" ]]; then
@@ -1319,7 +1351,8 @@ if [[ "$REVERT" = "false" ]] ; then
 		cp -v $SENTORA_PARANOID_CONFIG_PATH/apache2/https.conf $PANEL_PATH/configs/apache
 		if ! grep -q "https.conf" /etc/apache2/apache2.conf ; then
 			echo "Include $PANEL_PATH/configs/apache/https.conf" >> /etc/apache2/apache2.conf
-		fi		
+		fi
+		echo "NOTICE: You MUST comment/uncomment the Listen 443 in the $PANEL_PATH/configs/apache/https.conf if you are having troubles creting SSL sites"
 		# File permissions
 		change "" "g+w" root $ADMIN_GRP /etc/apache2/apache2.conf $PANEL_PATH/configs/apache/httpd.conf
 		change "" "g+w" root $ADMIN_GRP /etc/apache2/ports.conf*
@@ -1502,7 +1535,8 @@ fi
 echo -e "\n-- Cron / atd security"
 if [[ "$REVERT" = "false" ]] ; then
 	if [[ "$OS" = "Ubuntu" ]]; then
-		true
+		change "" "1730" root crontab /var/spool/cron/crontabs
+		change "" "600" $HTTP_USER crontab /var/spool/cron/crontabs/$HTTP_USER
 	fi
 else
 	if [[ "$OS" = "Ubuntu" ]]; then
@@ -1664,8 +1698,6 @@ if [[ "$REVERT" = "false" ]] ; then
 			change "" "750" $ADMIN_USR $HTTP_GROUP $PANEL_DATA/logs/domains/_default
 			ln -s  /var/log/apache2/other_vhosts_error.log $PANEL_DATA/logs/domains/_default/error.log
 			mkdir -vp $PANEL_DATA/logs/roundcube
-			touch $PANEL_DATA/logs/roundcube/sessions
-			change "" "660" $ADMIN_USR $HTTP_GROUP $PANEL_DATA/logs/roundcube/sessions
 		fi
 		# Prevent autoblock by setting localip
 		sed -i "s@%%LOCAL_IP%%@$local_ip@" $SENTORA_PARANOID_CONFIG_PATH/fail2ban/jail.local
@@ -1722,7 +1754,7 @@ if [[ "$REVERT" = "false" ]] ; then
 			change "-R" "g+w" root $ADMIN_GRP /etc/apparmor.d/apache2.d
 			echo "NOTICE: virtual hosts are confined this may affect virtualhost functionality"
 			aa-complain /etc/apparmor.d/*
-			echo "sentora-paranoid: why is this Multiple definitions exception ocurring here?"
+			#echo "sentora-paranoid: why is this Multiple definitions exception ocurring here?"
 			echo "NOTICE: Some profiles are set to complain, you are encouraged to set to enforce when ready"
 			sed -i "s@<Directory /etc/sentora/panel>@<Directory /etc/sentora/panel>\n\tAAHatName sentora@" $PANEL_PATH/configs/apache/httpd.conf
 			sed -i "s@#AAHatName sentora@AAHatName sentora@" $SENTORA_PARANOID_CONFIG_PATH/apache2/https.conf
@@ -1784,6 +1816,55 @@ if [[ "$STORE_TREE" = "true" ]] ; then
 	save_tree /etc/bind 2nd
 	save_tree /etc/fail2ban 2nd
 	save_tree /etc/apparmor.d 2nd
+fi
+
+# Validate replacements
+echo -e "\n-- Validating replacements"
+# Fail2ban
+if [ -f /etc/fail2ban/fail2ban/jail.local ] ; then
+	validate_replacement %%SSHDPORT%%	/etc/fail2ban/fail2ban/jail.local
+	validate_replacement %%LOCAL_IP%%	/etc/fail2ban/fail2ban/jail.local
+fi
+#iptables
+if [ -f $SENTORA_PARANOID_CONFIG_PATH/iptables/iptables.firewall.rules ] ; then
+	validate_replacement %%SSHDPORT%%	$SENTORA_PARANOID_CONFIG_PATH/iptables/iptables.firewall.rules
+	validate_replacement %%PP_START%%	$SENTORA_PARANOID_CONFIG_PATH/iptables/iptables.firewall.rules
+	validate_replacement %%PP_END%		$SENTORA_PARANOID_CONFIG_PATH/iptables/iptables.firewall.rules
+fi
+#ip6tables
+if [ -f $SENTORA_PARANOID_CONFIG_PATH/iptables/ip6tables.firewall.rules ] ; then
+	validate_replacement %%SSHDPORT%%	$SENTORA_PARANOID_CONFIG_PATH/iptables/ip6tables.firewall.rules
+	validate_replacement %%PP_START%%	$SENTORA_PARANOID_CONFIG_PATH/iptables/ip6tables.firewall.rules
+	validate_replacement %%PP_END%%		$SENTORA_PARANOID_CONFIG_PATH/iptables/ip6tables.firewall.rules
+fi
+# policyd
+if [ -f /usr/sbin/sp-policyd.pl ] ; then
+	validate_replacement %%LOCAL_IP%%	/usr/sbin/sp-policyd.pl
+	validate_replacement %%DBUSER%%		/usr/sbin/sp-policyd.pl
+	validate_replacement %%DBPASS%%		/usr/sbin/sp-policyd.pl
+fi
+# opendkim
+if [ -f /etc/opendkim/opendkim.conf ] ; then
+	validate_replacement %%DOMAIN%%		/etc/opendkim/opendkim.conf
+	validate_replacement %%POSTFIX_ID%%	/etc/opendkim/opendkim.conf
+fi
+# apache
+if [ -f $PANEL_PATH/configs/apache/https.conf ] ; then
+	validate_replacement %%ADMIN%%		$PANEL_PATH/configs/apache/https.conf
+	validate_replacement %%FQDN%%		$PANEL_PATH/configs/apache/https.conf
+	validate_replacement %%CERT%%		$PANEL_PATH/configs/apache/https.conf
+	validate_replacement %%KEY%%		$PANEL_PATH/configs/apache/https.conf
+	validate_replacement %%CAPEM%%		$PANEL_PATH/configs/apache/https.conf
+fi
+# proftpd
+if [ -f $PANEL_PATH/configs/proftpd/proftpd-mysql.conf ] ; then
+	validate_replacement %%PP_START%%	$PANEL_PATH/configs/proftpd/proftpd-mysql.conf
+	validate_replacement %%PP_END%%		$PANEL_PATH/configs/proftpd/proftpd-mysql.conf
+	validate_replacement %%CERT%%		$PANEL_PATH/configs/proftpd/proftpd-mysql.conf
+	validate_replacement %%KEY%%		$PANEL_PATH/configs/proftpd/proftpd-mysql.conf
+	validate_replacement %%CA_CERT%%	$PANEL_PATH/configs/proftpd/proftpd-mysql.conf
+	validate_replacement %%LOCAL_IP%%	$PANEL_PATH/configs/proftpd/proftpd-mysql.conf
+	validate_replacement %%PASSWD%%		$PANEL_PATH/configs/proftpd/proftpd-mysql.conf
 fi
 
 # Check if all services are running

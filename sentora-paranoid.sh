@@ -161,6 +161,18 @@ Would you like to continue anyway? $COLOR_RED (NOT RECOMENDED) $COLOR_END  (y/N)
 	done
 }
 
+validate_replacement() {
+	# $1 string to validate  $2 file
+	if [ -f $2 ]; then
+		found=$(grep "$1" $2)
+		if [ -n "$found" ]; then
+			echo "ERROR: <$1> was not replaced correctly in file $2"
+		fi
+	else
+		echo "WARNING: <$1> was not validated correctly: file $2 does not exist"
+	fi
+}
+
 #====================================================================================
 #--- Display the 'welcome' splash/user warning info..
 clear
@@ -403,7 +415,7 @@ clear
 logfile=sentora-paranoid-$$.log
 FQDN=$(grep "mydomain =" $PANEL_PATH/configs/postfix/main.cf | sed "s@mydomain = @@")
 #local_ip=$(ifconfig eth0 | sed -En 's|.*inet [^0-9]*(([0-9]*\.){3}[0-9]*).*$|\1|p')
-local_ip=$(ip addr show | awk '$1 == "inet" && $3 == "brd" { sub (/\/.*/,""); print $2 }')
+local_ip=$(ip addr show | awk '$1 == "inet" && $3 == "brd" { sub (/\/.*/,""); print $2 }' | head -n 1)
 
 touch $logfile
 exec > >(tee $logfile)
@@ -510,7 +522,7 @@ if ! [[ $SSHD_PORT =~ $re ]] ; then
 fi
 echo "SSHD Port: $SSHD_PORT"
 if [[ "$REVERT" = "false" ]] ; then
-	sed "s@%%SSHDPORT%%@$SSHD_PORT@" $SENTORA_PARANOID_CONFIG_PATH/iptables/iptables.firewall.orig > $SENTORA_PARANOID_CONFIG_PATH/iptables/iptables.firewall.rules 
+	sed "s@%%SSHDPORT%%@$SSHD_PORT@" $SENTORA_PARANOID_CONFIG_PATH/iptables/iptables.firewall.orig > $SENTORA_PARANOID_CONFIG_PATH/iptables/iptables.firewall.rules
 	sed "s@%%SSHDPORT%%@$SSHD_PORT@" $SENTORA_PARANOID_CONFIG_PATH/iptables/ip6tables.firewall.orig > $SENTORA_PARANOID_CONFIG_PATH/iptables/ip6tables.firewall.rules 
 	sed "s@%%SSHDPORT%%@$SSHD_PORT@g" $SENTORA_PARANOID_CONFIG_PATH/fail2ban/jail.local.orig > $SENTORA_PARANOID_CONFIG_PATH/fail2ban/jail.local
 	sed -i "s@%%PP_START%%@$PP_START@" $SENTORA_PARANOID_CONFIG_PATH/iptables/iptables.firewall.rules
@@ -1254,9 +1266,9 @@ if [[ "$REVERT" = "false" ]] ; then
 			echo "\$config['enable_installer'] = false;" >> $PANEL_PATH/configs/roundcube/roundcube_config.inc.php
 		fi
 		# File permissions
-		#change "" "664" root $ADMIN_GRP $PANEL_DATA/logs/roundcube/*
+		touch $PANEL_DATA/logs/roundcube/sessions
 		change "" "775" root $ADMIN_GRP $PANEL_DATA/logs/roundcube
-		change "" "666" root $ADMIN_GRP $PANEL_DATA/logs/roundcube/*
+		change "" "660" $ADMIN_USR $HTTP_GROUP $PANEL_DATA/logs/roundcube/sessions
 	fi
 else
 	if [[ "$OS" = "Ubuntu" ]]; then
@@ -1685,8 +1697,6 @@ if [[ "$REVERT" = "false" ]] ; then
 			change "" "750" $ADMIN_USR $HTTP_GROUP $PANEL_DATA/logs/domains/_default
 			ln -s  /var/log/apache2/other_vhosts_error.log $PANEL_DATA/logs/domains/_default/error.log
 			mkdir -vp $PANEL_DATA/logs/roundcube
-			touch $PANEL_DATA/logs/roundcube/session
-			change "" "660" $ADMIN_USR $HTTP_GROUP $PANEL_DATA/logs/roundcube/session
 		fi
 		# Prevent autoblock by setting localip
 		sed -i "s@%%LOCAL_IP%%@$local_ip@" $SENTORA_PARANOID_CONFIG_PATH/fail2ban/jail.local
@@ -1743,7 +1753,7 @@ if [[ "$REVERT" = "false" ]] ; then
 			change "-R" "g+w" root $ADMIN_GRP /etc/apparmor.d/apache2.d
 			echo "NOTICE: virtual hosts are confined this may affect virtualhost functionality"
 			aa-complain /etc/apparmor.d/*
-			echo "sentora-paranoid: why is this Multiple definitions exception ocurring here?"
+			#echo "sentora-paranoid: why is this Multiple definitions exception ocurring here?"
 			echo "NOTICE: Some profiles are set to complain, you are encouraged to set to enforce when ready"
 			sed -i "s@<Directory /etc/sentora/panel>@<Directory /etc/sentora/panel>\n\tAAHatName sentora@" $PANEL_PATH/configs/apache/httpd.conf
 			sed -i "s@#AAHatName sentora@AAHatName sentora@" $SENTORA_PARANOID_CONFIG_PATH/apache2/https.conf
@@ -1805,6 +1815,55 @@ if [[ "$STORE_TREE" = "true" ]] ; then
 	save_tree /etc/bind 2nd
 	save_tree /etc/fail2ban 2nd
 	save_tree /etc/apparmor.d 2nd
+fi
+
+# Validate replacements
+echo -e "\n-- Validating replacements"
+# Fail2ban
+if [ -f $SENTORA_PARANOID_CONFIG_PATH/fail2ban/jail.local ] ; then
+	validate_replacement %%SSHDPORT%%	$SENTORA_PARANOID_CONFIG_PATH/fail2ban/jail.local
+	validate_replacement %%LOCAL_IP%%	$SENTORA_PARANOID_CONFIG_PATH/fail2ban/jail.local
+fi
+#iptables
+if [ -f $SENTORA_PARANOID_CONFIG_PATH/iptables/iptables.firewall.rules ] ; then
+	validate_replacement %%SSHDPORT%%	$SENTORA_PARANOID_CONFIG_PATH/iptables/iptables.firewall.rules
+	validate_replacement %%PP_START%%	$SENTORA_PARANOID_CONFIG_PATH/iptables/iptables.firewall.rules
+	validate_replacement %%PP_END%		$SENTORA_PARANOID_CONFIG_PATH/iptables/iptables.firewall.rules
+fi
+#ip6tables
+if [ -f $SENTORA_PARANOID_CONFIG_PATH/iptables/ip6tables.firewall.rules ] ; then
+	validate_replacement %%SSHDPORT%%	$SENTORA_PARANOID_CONFIG_PATH/iptables/ip6tables.firewall.rules
+	validate_replacement %%PP_START%%	$SENTORA_PARANOID_CONFIG_PATH/iptables/ip6tables.firewall.rules
+	validate_replacement %%PP_END%%		$SENTORA_PARANOID_CONFIG_PATH/iptables/ip6tables.firewall.rules
+fi
+# policyd
+if [ -f $SENTORA_PARANOID_CONFIG_PATH/postfix/sp-policyd.pl ] ; then
+	validate_replacement %%LOCAL_IP%%	$SENTORA_PARANOID_CONFIG_PATH/postfix/sp-policyd.pl
+	validate_replacement %%DBUSER%%		$SENTORA_PARANOID_CONFIG_PATH/postfix/sp-policyd.pl
+	validate_replacement %%DBPASS%%		$SENTORA_PARANOID_CONFIG_PATH/postfix/sp-policyd.pl
+fi
+# opendkim
+if [ -f $SENTORA_PARANOID_CONFIG_PATH/opendkim/opendkim.conf ] ; then
+	validate_replacement %%DOMAIN%%		$SENTORA_PARANOID_CONFIG_PATH/opendkim/opendkim.conf
+	validate_replacement %%POSTFIX_ID%%	$SENTORA_PARANOID_CONFIG_PATH/opendkim/opendkim.conf
+fi
+# apache
+if [ -f $SENTORA_PARANOID_CONFIG_PATH/apache2/https.conf ] ; then
+	validate_replacement %%ADMIN%%		$SENTORA_PARANOID_CONFIG_PATH/apache2/https.conf
+	validate_replacement %%FQDN%%		$SENTORA_PARANOID_CONFIG_PATH/apache2/https.conf
+	validate_replacement %%CERT%%		$SENTORA_PARANOID_CONFIG_PATH/apache2/https.conf
+	validate_replacement %%KEY%%		$SENTORA_PARANOID_CONFIG_PATH/apache2/https.conf
+	validate_replacement %%CAPEM%%		$SENTORA_PARANOID_CONFIG_PATH/apache2/https.conf
+fi
+# mysql
+if [ -f $SENTORA_PARANOID_CONFIG_PATH/proftpd/proftpd-mysql.conf ] ; then
+	validate_replacement %%PP_START%%	$SENTORA_PARANOID_CONFIG_PATH/proftpd/proftpd-mysql.conf
+	validate_replacement %%PP_END%%		$SENTORA_PARANOID_CONFIG_PATH/proftpd/proftpd-mysql.conf
+	validate_replacement %%CERT%%		$SENTORA_PARANOID_CONFIG_PATH/proftpd/proftpd-mysql.conf
+	validate_replacement %%KEY%%		$SENTORA_PARANOID_CONFIG_PATH/proftpd/proftpd-mysql.conf
+	validate_replacement %%CA_CERT%%	$SENTORA_PARANOID_CONFIG_PATH/proftpd/proftpd-mysql.conf
+	validate_replacement %%LOCAL_IP%%	$SENTORA_PARANOID_CONFIG_PATH/proftpd/proftpd-mysql.conf
+	validate_replacement %%PASSWD%%		$SENTORA_PARANOID_CONFIG_PATH/proftpd/proftpd-mysql.conf
 fi
 
 # Check if all services are running

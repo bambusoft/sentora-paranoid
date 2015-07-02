@@ -146,19 +146,24 @@ ask_user_yn() {
 # Function that can be called so users have the choice
 ask_user_continue() {
 	END_SCRIPT=""
-	while true; do
-		read -e -p "`echo -e "$COLOR_YLW WARNING: $COLOR_END Step FAIL. Continuing could break your system.
+	if [ $ADVANCED = "true" ];then
+		while true; do
+			read -e -p "`echo -e "$COLOR_YLW WARNING: $COLOR_END Step FAIL. Continuing could break your system.
 Would you like to continue anyway? $COLOR_RED (NOT RECOMENDED) $COLOR_END  (y/N): "`" -i "N" END_SCRIPT
-		case $END_SCRIPT in
-			[Yy]* ) echo -e "$COLOR_YLW WARNING: $COLOR_END Continuing even though it could potentially break your system. Press Ctrl+C to exit now (If you changed your mind)"
+			case $END_SCRIPT in
+				[Yy]* ) echo -e "$COLOR_YLW WARNING: $COLOR_END Continuing even though it could potentially break your system. Press Ctrl+C to exit now (If you changed your mind)"
 					sleep 3
 					break
 					;;
-			[Nn]* ) exit 1;
+				[Nn]* ) exit 1;
 					break
 					;;
-		esac
-	done
+			esac
+		done
+	else 
+		echo -e "$COLOR_RED ERROR: $COLOR_END Step FAIL. Give command line option '--advanced' to have the ability to ignore this. Exiting..."
+		exit 1;
+	fi
 }
 
 validate_replacement() {
@@ -173,12 +178,29 @@ validate_replacement() {
 	fi
 }
 
+# Check if var is in OPTIONS
+OPTIONS="+($1|$2|$3|$4|$5)" # Shouldn't be more than 5 parameters
+is_opt() {
+	shopt -s extglob         # enables pattern lists like +(...|...)
+	case "$1" in
+        $OPTIONS) ISOPTION="true"
+        ;;
+        *) ISOPTION="false"
+    esac
+	shopt -u extglob # puts it back to normal
+}
+
 #====================================================================================
 #--- Display the 'welcome' splash/user warning info..
 clear
 echo -e "\n#########################################################################"
 echo "#   Welcome to sentora-paranoid, the unofficial Sentora security script #"
 echo "#########################################################################"
+
+#====================================================================================
+#--- Advanced mode warning and var set
+is_opt "--advanced"
+ADVANCED="$ISOPTION"
 
 #====================================================================================
 # Check if the user is 'root' before allowing any modification

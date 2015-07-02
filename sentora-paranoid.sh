@@ -1352,7 +1352,7 @@ if [[ "$REVERT" = "false" ]] ; then
 		if ! grep -q "https.conf" /etc/apache2/apache2.conf ; then
 			echo "Include $PANEL_PATH/configs/apache/https.conf" >> /etc/apache2/apache2.conf
 		fi
-		echo "NOTICE: You MUST comment/uncomment the Listen 443 in the $PANEL_PATH/configs/apache/https.conf if you are having troubles creting SSL sites"
+		echo "NOTICE: You MUST comment/uncomment the Listen 443 in the $PANEL_PATH/configs/apache/https.conf if you are having troubles creating SSL sites"
 		# File permissions
 		change "" "g+w" root $ADMIN_GRP /etc/apache2/apache2.conf $PANEL_PATH/configs/apache/httpd.conf
 		change "" "g+w" root $ADMIN_GRP /etc/apache2/ports.conf*

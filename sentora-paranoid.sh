@@ -26,7 +26,7 @@
 #
 # Parameters: [|revert|clean|status]
 #	No parameter means install
-#	revert - will try to set te sentora environment to its initial state
+#	revert - will try to set the sentora environment to its initial state
 #	clean  - removes log and tree files
 #	status - will show services status
 
@@ -40,7 +40,7 @@ fi
 
 SENTORA_PARANOID_VERSION="1.0.2-dev-snapshot"	# This installer version
 SENTORA_INSTALLER_VERSION="1.0.2"	# Script version used to install sentora
-SENTORA_CORE_VERSION="1.0.0"		# Sentora core versión
+SENTORA_CORE_VERSION="1.0.0"		# Sentora core version
 SENTORA_PRECONF_VERSION="1.0.0"		# Preconf used by sentora script installer
 
 PANEL_PATH="/etc/sentora"
@@ -219,13 +219,13 @@ if [[ "$1" = "status" ]] ; then
 	else
 		echo -e "$COLOR_RED Execution failed: you must install sentora first. $COLOR_END"
 	fi
-	# Sistem shows status or error and exit
+	# System shows status or error and exit
 	exit
 fi
 
 #====================================================================================
 #  Ensure the OS is compatible with the script
-# (Centos 6 & 7 and Ubuntu 12.04 are considered but not tested, feel free to send feedback)
+# (CentOS 6 & 7 and Ubuntu 12.04 are considered but not tested, feel free to send feedback)
 echo -e "\nChecking that minimal requirements are ok"
 BITS=$(uname -m | sed 's/x86_//;s/i[3-6]86/32/')
 if [ -f /etc/centos-release ]; then
@@ -281,7 +281,7 @@ fi
 #====================================================================================
 # Check if the administrator is requesting to revert sentora-paranoid
 if [[ "$1" = "revert" ]] ; then
-	    echo -e "$COLOR_YLW Reversion requested, this will disable security packages installed and set file permissons to its original state. $COLOR_END\n"
+	    echo -e "$COLOR_YLW Reversion requested, this will disable security packages installed and set file permissions to its original state. $COLOR_END\n"
 		REVERT="true"
 		ACTION="revert"
 else
@@ -291,13 +291,13 @@ fi
 
 #====================================================================================
 # Check for some common control security packages that we know will affect the installation/operating of sentora-paranoid.
-echo "Checking for preinstalled security packages"
+echo "Checking for pre-installed security packages"
 if [[ "$OS" = "Ubuntu" ]]; then
 	# UFW must be disabled
 	if [ -e /usr/sbin/ufw ] ; then
 	 UFWstatus=$(ufw status | sed -e "s/Status: //")
 	 if [[ "$UFWstatus" != "inactive" ]] ; then
-		echo -e "$COLOR_RED Execution failed: you must disable UncomplicatedFirewall (ufw) to proceed. $COLOR_END"
+		echo -e "$COLOR_RED Execution failed: you must disable UncomplicatedFirewall (UFW) to proceed. $COLOR_END"
 		ask_user_continue
 	 fi
 	fi
@@ -305,7 +305,7 @@ if [[ "$OS" = "Ubuntu" ]]; then
 	if [ -e /sbin/iptables ] ; then
 	 iptables_version=$(iptables --version | sed -e "s/iptables //")
 	 if [ -z "$iptables_version" ] ; then
-		echo -e "$COLOR_RED Execution failed: iptables is not preinstalled/running on this system. $COLOR_END"
+		echo -e "$COLOR_RED Execution failed: iptables is not pre-installed/running on this system. $COLOR_END"
 		ask_user_continue
 	 fi
 	fi
@@ -313,14 +313,14 @@ if [[ "$OS" = "Ubuntu" ]]; then
 	if [ -e /sbin/ip6tables ] ; then
 	 ip6tables_version=$(ip6tables --version | sed -e "s/ip6tables //")
 	 if [ -z "$ip6tables_version" ] ; then
-		echo -e "$COLOR_RED Execution failed: ip6tables is not preinstalled/running on this system. $COLOR_END"
+		echo -e "$COLOR_RED Execution failed: ip6tables is not pre-installed/running on this system. $COLOR_END"
 		ask_user_continue
 	 fi
 	fi
-	# fail2ban must not be preinstalled
+	# fail2ban must not be pre-installed
 	if [[ "$REVERT" = "false" ]] ; then
 		if [ -e /etc/init.d/fail2ban ] ; then
-			echo -e "$COLOR_RED Execution failed: fail2ban is preinstalled on this system. $COLOR_END"
+			echo -e "$COLOR_RED Execution failed: fail2ban is pre-installed on this system. $COLOR_END"
 			echo "It appears that a failure log scanner is already installed on your server;"
 			echo " This installer is designed to install and configure sentora-paranoid on a clean OS installation with Sentora installed only!"
 			echo -e "\nPlease re-install your OS and sentora $SENTORA_CORE_VERSION before attempting to install sentora-paranoid using this script."
@@ -491,7 +491,7 @@ if [[ "$REVERT" = "false" ]] ; then
 	# Get latest sentora-paranoid/preconf
 	while true; do
 		wget -nv -O /tmp/preconf.zip http://sentora-paranoid.open-source.tk/installers/$SENTORA_PARANOID_VERSION/preconf.zip
-		# If web not available and you have a preconf.zip copy for this version, plese put in the /tmp directory and ignore previous HTTP error
+		# If web not available and you have a preconf.zip copy for this version, please put in the /tmp directory and ignore previous HTTP error
 		if [ -f /tmp/preconf.zip ] ; then
 			unzip -oq /tmp/preconf.zip -d /tmp
 			if [ -d /tmp/preconf/preconf ] ; then
@@ -537,7 +537,7 @@ echo -e "\n-- Obtaining current sshd port"
 SSHD_PORT=$( cat /etc/ssh/sshd_config | grep "Port" | sed -e "s/Port //" )
 re='^[0-9]+$'
 if ! [[ $SSHD_PORT =~ $re ]] ; then
-   echo "NOTICE: Could not determine current ssh port number, using default."
+   echo "NOTICE: Could not determine current SSH port number, using default."
    echo "You must change firewall rules manually if this is not the port you are using to connect to this server"
    echo "otherwise, you will be blocked to access the server"
    SSHD_PORT=22;
@@ -555,7 +555,7 @@ fi
 
 #====================================================================================
 #--- Stop current security services in every case (revert|install)
-echo -e "\n-- Stoping security services"
+echo -e "\n-- Stopping security services"
 if [[ "$OS" = "Ubuntu" ]]; then
 	if [[ "$UFWstatus" != "inactive" ]] ; then
 		ufw disable
@@ -599,7 +599,7 @@ if [[ "$OS" = "Ubuntu" ]]; then
 		ip6tables -P OUTPUT ACCEPT
 	fi
 	if [ -e /etc/init.d/fail2ban ] ; then
-		echo "Stoping fail2ban service"
+		echo "Stopping fail2ban service"
 		/etc/init.d/fail2ban stop
 	fi
 fi
@@ -680,7 +680,7 @@ if [[ "$REVERT" = "false" ]] ; then
 	change "" "755" root root $PANEL_PATH/panel/inc
 	find $PANEL_PATH/panel/dryden -type d -exec chmod 755 {} +
 	find $PANEL_PATH/panel/dryden -type f -exec chmod 644 {} +
-	change "-R" "go-w" root root $PANEL_PATH/panel/etc						# who requires a public writtable directory?
+	change "-R" "go-w" root root $PANEL_PATH/panel/etc						# who requires a public writeable directory?
 	find $PANEL_PATH/panel/etc -type d -exec chmod 755 {} +
 	find $PANEL_PATH/panel/etc -type f -name '*.sh' -exec chmod 755 {} \;
 	find $PANEL_PATH/panel/etc -type f -name '*.php' -exec chmod 644 {} \;
@@ -769,9 +769,9 @@ if [[ "$REVERT" = "false" ]] ; then
 		#bind-address is set to 127.0.0.1 by default, we ensure access from localhost only and disable load of local files for local mysql accounts
 		sed -i "s@bind-address@bind-address = 127.0.0.1\nlocal-infile=0\n#@" /etc/mysql/my.cnf
 		echo "NOTICE: mysql can be accessed from 127.0.0.1 only"
-		# (Put this ind documentation, not here)
-		#if you really need to acces mysql from outside, please consider a SSH tunnel
-		#to get into loclahost with another port and forward that port to mysql 3306
+		# (Put this in documentation, not here)
+		# if you really need to access mysql from outside, please consider a SSH tunnel
+		# to get into localhost with another port and forward that port to mysql 3306
 		#
 		# Secure mysql from inside
 		Q1="DELETE FROM mysql.user WHERE User='';"
@@ -1343,7 +1343,7 @@ if [[ "$REVERT" = "false" ]] ; then
 			cp -v /etc/apache2/conf-available/security.conf $SENTORA_PARANOID_BACKUP_PATH/apache2/conf-available
 		fi
 		echo "$HTTP_USER: root" >> /etc/aliases
-		echo "NOTICE: All mail sended or bounced fot $HTTP_USER will be sended to the root alias"
+		echo "NOTICE: All mail sent or bounced for $HTTP_USER will be sent to the root alias"
 		# remove security config override in sentora/httpd.conf, the rigth place is security.conf
 		sed -i "s@ServerTokens Prod@#ServerTokens Prod@" $PANEL_PATH/configs/apache/httpd.conf
 		# Add host(ing) signature
@@ -1759,7 +1759,7 @@ if [[ "$REVERT" = "false" ]] ; then
 			else
 				mkdir -vp $SENTORA_PARANOID_BACKUP_PATH/apparmor.d
 				cp -vr /etc/apparmor.d/* $SENTORA_PARANOID_BACKUP_PATH/apparmor.d
-				# apache sentora config file backedup by apache
+				# apache sentora config file backed up by apache
 				mkdir -vp $SENTORA_PARANOID_BACKUP_PATH/panel/modules/apache_admin/hooks
 				cp -vr $PANEL_PATH/panel/modules/apache_admin/hooks/OnDaemonRun.hook.php $SENTORA_PARANOID_BACKUP_PATH/panel/modules/apache_admin/hooks/OnDaemonRun.hook.php
 			fi
@@ -1774,9 +1774,9 @@ if [[ "$REVERT" = "false" ]] ; then
 			cp -v $SENTORA_PARANOID_CONFIG_PATH/apparmor.d/apache2.d/* /etc/apparmor.d/apache2.d
 			echo "NOTICE: apache is confined this may affect web server functionality"
 			change "-R" "g+w" root $ADMIN_GRP /etc/apparmor.d/apache2.d
-			echo "NOTICE: virtual hosts are confined this may affect virtualhost functionality"
+			echo "NOTICE: virtual hosts are confined this may affect virtual host functionality"
 			aa-complain /etc/apparmor.d/*
-			#echo "sentora-paranoid: why is this Multiple definitions exception ocurring here?"
+			#echo "sentora-paranoid: why is this Multiple definitions exception occurring here?"
 			echo "NOTICE: Some profiles are set to complain, you are encouraged to set to enforce when ready"
 			sed -i "s@<Directory /etc/sentora/panel>@<Directory /etc/sentora/panel>\n\tAAHatName sentora@" $PANEL_PATH/configs/apache/httpd.conf
 			sed -i "s@#AAHatName sentora@AAHatName sentora@" $SENTORA_PARANOID_CONFIG_PATH/apache2/https.conf

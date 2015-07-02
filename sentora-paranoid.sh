@@ -1351,7 +1351,8 @@ if [[ "$REVERT" = "false" ]] ; then
 		cp -v $SENTORA_PARANOID_CONFIG_PATH/apache2/https.conf $PANEL_PATH/configs/apache
 		if ! grep -q "https.conf" /etc/apache2/apache2.conf ; then
 			echo "Include $PANEL_PATH/configs/apache/https.conf" >> /etc/apache2/apache2.conf
-		fi		
+		fi
+		echo "NOTICE: You MUST comment/uncomment the Listen 443 in the $PANEL_PATH/configs/apache/https.conf if you are having troubles creting SSL sites"
 		# File permissions
 		change "" "g+w" root $ADMIN_GRP /etc/apache2/apache2.conf $PANEL_PATH/configs/apache/httpd.conf
 		change "" "g+w" root $ADMIN_GRP /etc/apache2/ports.conf*
@@ -1820,9 +1821,9 @@ fi
 # Validate replacements
 echo -e "\n-- Validating replacements"
 # Fail2ban
-if [ -f $SENTORA_PARANOID_CONFIG_PATH/fail2ban/jail.local ] ; then
-	validate_replacement %%SSHDPORT%%	$SENTORA_PARANOID_CONFIG_PATH/fail2ban/jail.local
-	validate_replacement %%LOCAL_IP%%	$SENTORA_PARANOID_CONFIG_PATH/fail2ban/jail.local
+if [ -f /etc/fail2ban/fail2ban/jail.local ] ; then
+	validate_replacement %%SSHDPORT%%	/etc/fail2ban/fail2ban/jail.local
+	validate_replacement %%LOCAL_IP%%	/etc/fail2ban/fail2ban/jail.local
 fi
 #iptables
 if [ -f $SENTORA_PARANOID_CONFIG_PATH/iptables/iptables.firewall.rules ] ; then
@@ -1837,33 +1838,33 @@ if [ -f $SENTORA_PARANOID_CONFIG_PATH/iptables/ip6tables.firewall.rules ] ; then
 	validate_replacement %%PP_END%%		$SENTORA_PARANOID_CONFIG_PATH/iptables/ip6tables.firewall.rules
 fi
 # policyd
-if [ -f $SENTORA_PARANOID_CONFIG_PATH/postfix/sp-policyd.pl ] ; then
-	validate_replacement %%LOCAL_IP%%	$SENTORA_PARANOID_CONFIG_PATH/postfix/sp-policyd.pl
-	validate_replacement %%DBUSER%%		$SENTORA_PARANOID_CONFIG_PATH/postfix/sp-policyd.pl
-	validate_replacement %%DBPASS%%		$SENTORA_PARANOID_CONFIG_PATH/postfix/sp-policyd.pl
+if [ -f /usr/sbin/sp-policyd.pl ] ; then
+	validate_replacement %%LOCAL_IP%%	/usr/sbin/sp-policyd.pl
+	validate_replacement %%DBUSER%%		/usr/sbin/sp-policyd.pl
+	validate_replacement %%DBPASS%%		/usr/sbin/sp-policyd.pl
 fi
 # opendkim
-if [ -f $SENTORA_PARANOID_CONFIG_PATH/opendkim/opendkim.conf ] ; then
-	validate_replacement %%DOMAIN%%		$SENTORA_PARANOID_CONFIG_PATH/opendkim/opendkim.conf
-	validate_replacement %%POSTFIX_ID%%	$SENTORA_PARANOID_CONFIG_PATH/opendkim/opendkim.conf
+if [ -f /etc/opendkim/opendkim.conf ] ; then
+	validate_replacement %%DOMAIN%%		/etc/opendkim/opendkim.conf
+	validate_replacement %%POSTFIX_ID%%	/etc/opendkim/opendkim.conf
 fi
 # apache
-if [ -f $SENTORA_PARANOID_CONFIG_PATH/apache2/https.conf ] ; then
-	validate_replacement %%ADMIN%%		$SENTORA_PARANOID_CONFIG_PATH/apache2/https.conf
-	validate_replacement %%FQDN%%		$SENTORA_PARANOID_CONFIG_PATH/apache2/https.conf
-	validate_replacement %%CERT%%		$SENTORA_PARANOID_CONFIG_PATH/apache2/https.conf
-	validate_replacement %%KEY%%		$SENTORA_PARANOID_CONFIG_PATH/apache2/https.conf
-	validate_replacement %%CAPEM%%		$SENTORA_PARANOID_CONFIG_PATH/apache2/https.conf
+if [ -f $PANEL_PATH/configs/apache/https.conf ] ; then
+	validate_replacement %%ADMIN%%		$PANEL_PATH/configs/apache/https.conf
+	validate_replacement %%FQDN%%		$PANEL_PATH/configs/apache/https.conf
+	validate_replacement %%CERT%%		$PANEL_PATH/configs/apache/https.conf
+	validate_replacement %%KEY%%		$PANEL_PATH/configs/apache/https.conf
+	validate_replacement %%CAPEM%%		$PANEL_PATH/configs/apache/https.conf
 fi
-# mysql
-if [ -f $SENTORA_PARANOID_CONFIG_PATH/proftpd/proftpd-mysql.conf ] ; then
-	validate_replacement %%PP_START%%	$SENTORA_PARANOID_CONFIG_PATH/proftpd/proftpd-mysql.conf
-	validate_replacement %%PP_END%%		$SENTORA_PARANOID_CONFIG_PATH/proftpd/proftpd-mysql.conf
-	validate_replacement %%CERT%%		$SENTORA_PARANOID_CONFIG_PATH/proftpd/proftpd-mysql.conf
-	validate_replacement %%KEY%%		$SENTORA_PARANOID_CONFIG_PATH/proftpd/proftpd-mysql.conf
-	validate_replacement %%CA_CERT%%	$SENTORA_PARANOID_CONFIG_PATH/proftpd/proftpd-mysql.conf
-	validate_replacement %%LOCAL_IP%%	$SENTORA_PARANOID_CONFIG_PATH/proftpd/proftpd-mysql.conf
-	validate_replacement %%PASSWD%%		$SENTORA_PARANOID_CONFIG_PATH/proftpd/proftpd-mysql.conf
+# proftpd
+if [ -f $PANEL_PATH/configs/proftpd/proftpd-mysql.conf ] ; then
+	validate_replacement %%PP_START%%	$PANEL_PATH/configs/proftpd/proftpd-mysql.conf
+	validate_replacement %%PP_END%%		$PANEL_PATH/configs/proftpd/proftpd-mysql.conf
+	validate_replacement %%CERT%%		$PANEL_PATH/configs/proftpd/proftpd-mysql.conf
+	validate_replacement %%KEY%%		$PANEL_PATH/configs/proftpd/proftpd-mysql.conf
+	validate_replacement %%CA_CERT%%	$PANEL_PATH/configs/proftpd/proftpd-mysql.conf
+	validate_replacement %%LOCAL_IP%%	$PANEL_PATH/configs/proftpd/proftpd-mysql.conf
+	validate_replacement %%PASSWD%%		$PANEL_PATH/configs/proftpd/proftpd-mysql.conf
 fi
 
 # Check if all services are running

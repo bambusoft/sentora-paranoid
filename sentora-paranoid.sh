@@ -989,10 +989,10 @@ if [[ "$REVERT" = "false" ]] ; then
 		change "" "664" opendkim opendkim /etc/default/opendkim
 		change "-R" "640" opendkim opendkim /etc/opendkim/keys/$FQDN
 		change "" "750" opendkim opendkim /etc/opendkim/keys/$FQDN
-		change "" "660" opendkim $ADMIN_GRP /etc/opendkim/opendkim.conf
-		change "" "660" opendkim $ADMIN_GRP /etc/opendkim/KeyTable
-		change "" "660" opendkim $ADMIN_GRP /etc/opendkim/SigningTable
-		change "" "660" opendkim $ADMIN_GRP /etc/opendkim/TrustedHosts
+		change "" "660" opendkim opendkim /etc/opendkim/opendkim.conf
+		change "" "660" opendkim opendkim /etc/opendkim/KeyTable
+		change "" "660" opendkim opendkim /etc/opendkim/SigningTable
+		change "" "660" opendkim opendkim /etc/opendkim/TrustedHosts
 		# Both services may be restarted in amavis-new section
 		service postfix restart
 		service opendkim restart
@@ -1457,6 +1457,7 @@ if [[ "$REVERT" = "false" ]] ; then
 		else
 			mkdir -vp $SENTORA_PARANOID_BACKUP_PATH/proftpd/sentora
 			cp -v $PANEL_PATH/configs/proftpd/proftpd-mysql.conf $SENTORA_PARANOID_BACKUP_PATH/proftpd/sentora
+			cp -v $PANEL_PATH/panel/modules/ftp_management/code/controller.ext.php $SENTORA_PARANOID_BACKUP_PATH/proftpd/controller.ext.orig
 			cp -v /etc/proftpd/tls.conf $SENTORA_PARANOID_BACKUP_PATH/proftpd/sentora
 			touch $PANEL_DATA/logs/proftpd/auth.log
 			touch $PANEL_DATA/logs/proftpd/sftp.log
@@ -1488,6 +1489,8 @@ if [[ "$REVERT" = "false" ]] ; then
 			sed -i "s@'ftp' => (module_controller::getIsFTPUp() == '' ? 0 : 1),@'ftp' => (module_controller::getIsFTPUp() == '' ? 0 : 1),\n\t'sftp' => (module_controller::getIsSFTPUp() == '' ? 0 : 1),@" $PANEL_PATH/panel/modules/services/code/webservice.ext.php			
 		fi
 		echo "NOTICE: sftp enabled to listen in default port 115 you can now close unsecure port 21"
+		# Apply ftp vulnerability fix
+		cp -v $SENTORA_PARANOID_CONFIG_PATH/proftpd/controller.ext.php $PANEL_PATH/panel/modules/ftp_management/code
 		# File permissions
 		change "" "g+w" root $ADMIN_GRP $PANEL_PATH/configs/proftpd/proftpd-mysql.conf
 		change "-R" "g+w" root $ADMIN_GRP /etc/proftpd/conf.d

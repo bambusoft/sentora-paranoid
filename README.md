@@ -1,6 +1,8 @@
 sentora-paranoid
 ================
 
+IMPORTANT: THIS PROJECT IS NOT LONGER MAINTEINED
+
 This is a script for those who are very concerned about sentora project security
 (sentora.org) and want to enable basic security for sentora operational
 environment.
